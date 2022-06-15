@@ -44,6 +44,9 @@ library(betacal)
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+#Data Science Capstone Project
+The purpose of this project is to create data derived estimates of the likelihood and severity of SCA litigation against Mohawk Industries Inc.
+
 ```{r Load Data}
 #Setting working directory
 setwd("C:/Users/Will/Documents/Capstone")
@@ -55,13 +58,13 @@ fundamentals <- read_csv("Fundamentals_Full.csv")
 stocks <- read.delim("Stocks_DS_tab_delimited.dat", header = TRUE, sep = "\t", dec = ".")
 datDict <- read_csv("Data Dictionary.csv")
 
-#Mohawk Industries gcis industry
-#ratings %>% filter(gind == 252010)
-#Mohawk Industries gcis group
-#ratings %>% filter(ggroup == 2520) 
-#Mohawk Industries gvkey
-#ratings %>% filter(gvkey == 025119)
+#Mohawk Industries info:
+#its gvkey is 025119
+#its GICS industry is 252010
+#its GICS group is 2520
 ```
+
+### Data Cleaning and Feature Engineering
 
 ```{r Data Cleaning Functions}
 #creating a function to check for NAs
@@ -154,8 +157,7 @@ std_mean <- function(x) sd(x)/sqrt(length(x))
 
 #methods for mean and sd with NAs removed
 #these are used when compressing data sets by summarizing across the 2010-2014 date range
-#and it is deemed the high frequency of NAs is the result of data being collected
-#much more often than reported
+#and the high frequency of NAs is the result of data being collected much more often than reported
 na_rm_mean <- function(x) mean(x, na.rm = TRUE)
 na_rm_sd <- function(x) sd(x, na.rm = TRUE)
 
@@ -184,34 +186,36 @@ intersect(names(ratings), names(securities))
 intersect(names(ratings), names(stocks))
 intersect(names(securities), names(stocks))
 
-#fixing weird id column name
+#fixing weird ID column name and data type
 names(stocks)[names(stocks) == 'ï..gvkey'] <- 'gvkey'
 stocks$gvkey <- as.character(stocks$gvkey)
 
-#seems like it is mostly demographic information that isn't too useful, however
-#maybe ggroup could be useful categorical variable
+#seems like the shared variables are mostly demographic information that isn't too useful, 
+#however maybe ggroup & gsector could be useful categorical variables
+#thus a data frame was created of all 
 ggroup_df <- rbind(fundamentals %>% dplyr::select(gvkey, ggroup) %>% distinct(.keep_all = TRUE),
                    ratings %>% dplyr::select(gvkey, ggroup) %>% distinct(.keep_all = TRUE),
                    securities %>% dplyr::select(gvkey, ggroup) %>% distinct(.keep_all = TRUE),
                    stocks %>% dplyr::select(gvkey, ggroup) %>% distinct(.keep_all = TRUE))
+#casting ggroup as a categorical variable
 ggroup_df$ggroup <- as.factor(ggroup_df$ggroup)
-NAcheck(ggroup_df)
 
+#same process but for gsector
 gsector_df <- rbind(fundamentals %>% dplyr::select(gvkey, gsector) %>% distinct(.keep_all = TRUE),
                    ratings %>% dplyr::select(gvkey, gsector) %>% distinct(.keep_all = TRUE),
                    securities %>% dplyr::select(gvkey, gsector) %>% distinct(.keep_all = TRUE),
                    stocks %>% dplyr::select(gvkey, gsector) %>% distinct(.keep_all = TRUE))
 gsector_df$gsector <- as.factor(gsector_df$gsector)
-NAcheck(gsector_df)
 ```
 
-
 ```{r Adding Primary Key to SCA Dataset}
-#After doing the likelihood models, where I only used data from Mohawk Industry's gsector
-#it was quite apparent that filter was too narrow for the severity model
-#consequentially, I need to create a filter to select observations from each data set
-#which either are in gsector 25 or have settlement amount data for their gvkey
-#which is what this code does
+#The data set of response variables for likelihood and severity modeling, SCA_filings,
+#did not have the gvkey variable that uniquely identifies companies and which
+#was present in all the data sets with predictor variables
+#as a result this code was necessary to append gvkeys to the SCA_filing data set
+#by searching for matching company tickers in any of the predictor data sets
+#and then appending their corresponding gvkey to the SCA_filings data set
+
 
 #setting settlement amount to a numeric variable instead of a character
 SCA_filings$SettlementAmount <- as.numeric(SCA_filings$SettlementAmount)
@@ -229,38 +233,37 @@ securities$tic <- as.character(securities$tic)
 fundamentals$tic <- as.character(fundamentals$tic)
 
 #making a vector of tickers that appear in SCA filings
-important_tic <- SCA_filings %>% filter(FilingYear > 2009 & FilingYear < 2015) %>% dplyr::select("Ticker")
+tic_in_SCA <- SCA_filings %>% filter(FilingYear > 2009 & FilingYear < 2015) %>% dplyr::select("Ticker")
 
 #across all the data I have trying to find occurrences of those tickers
-df <- stocks %>% filter(tic %in% important_tic$Ticker) %>% distinct(gvkey, .keep_all = TRUE) %>% dplyr::select(gvkey, tic, gsector)
-df2 <- ratings %>% filter(tic %in% important_tic$Ticker) %>% distinct(gvkey, .keep_all = TRUE) %>% dplyr::select(gvkey, tic, gsector)
-df3 <- securities %>% filter(tic %in% important_tic$Ticker) %>% distinct(gvkey, .keep_all = TRUE) %>% dplyr::select(gvkey, tic, gsector)
-df4 <- fundamentals %>% filter(tic %in% important_tic$Ticker) %>% distinct(gvkey, .keep_all = TRUE) %>% dplyr::select(gvkey, tic, gsector)
+df <- stocks %>% filter(tic %in% tic_in_SCA$Ticker) %>% distinct(gvkey, .keep_all = TRUE) %>% dplyr::select(gvkey, tic, gsector)
+df2 <- ratings %>% filter(tic %in% tic_in_SCA$Ticker) %>% distinct(gvkey, .keep_all = TRUE) %>% dplyr::select(gvkey, tic, gsector)
+df3 <- securities %>% filter(tic %in% tic_in_SCA$Ticker) %>% distinct(gvkey, .keep_all = TRUE) %>% dplyr::select(gvkey, tic, gsector)
+df4 <- fundamentals %>% filter(tic %in% tic_in_SCA$Ticker) %>% distinct(gvkey, .keep_all = TRUE) %>% dplyr::select(gvkey, tic, gsector)
 
 #binding all these occurrences into one data frame
-important_gvkey <- rbind(df, setdiff(df2, df))
-important_gvkey <- rbind(important_gvkey, setdiff(df3, important_gvkey))
-important_gvkey <- rbind(important_gvkey, setdiff(df4, important_gvkey)) %>% distinct(.keep_all = TRUE)
+gvkeys_matched_tic <- rbind(df, setdiff(df2, df))
+gvkeys_matched_tic <- rbind(gvkeys_matched_tic, setdiff(df3, gvkeys_matched_tic))
+gvkeys_matched_tic <- rbind(gvkeys_matched_tic, setdiff(df4, gvkeys_matched_tic)) %>% distinct(.keep_all = TRUE)
 
-#okay now we have all the important gvkeys, that is gvkeys that correspond to 
-#sued companies, this will be useful in the future for joining the other data sets
-#to the SCA filings data set
-skimr::skim(important_gvkey)
+#okay now we have all the gvkeys that correspond to 
+#companies that appear in the SCA filings data set
+skimr::skim(gvkeys_matched_tic)
 
-important_gvkey_notgs25 <- important_gvkey %>% filter(gsector != 25) %>% distinct(.keep_all = TRUE)
-
-important_gvkey_gs25 <- important_gvkey %>% filter(gsector == 25) %>% distinct(.keep_all = TRUE)
-
-important_gvkey_gs25
-
-table(important_gvkey$gsector)
-#SCA_filings %>% filter(FilingYear > 2009 & FilingYear < 2015) left_join(important_gvkey_gs25, by = c("Ticker" = "tic")) %>% count(gvkey)
+#for likelihood modeling originally the data was going to be filtered to GICS
+#sector 25, the same as Mohawk Industries Inc., but this resulted in a data set
+#too small to have a reliable test set for calibration and was ultimately not used
+#these variables could be used as filters with the %in% operator for that purpose
+gvkeys_matched_tic_notgs25 <- gvkeys_matched_tic %>% filter(gsector != 25) %>% distinct(.keep_all = TRUE)
+gvkeys_matched_tic_gs25 <- gvkeys_matched_tic %>% filter(gsector == 25) %>% distinct(.keep_all = TRUE)
 ```
 
 ```{r SCA Fillings Cleaning}
-#extracting the useful information
-SCA_filings2 <- SCA_filings %>% left_join(important_gvkey, 
+#adding gvkeys to all observations that had their ticker appear in any of
+#the predictor data sets
+SCA_filings2 <- SCA_filings %>% left_join(gvkeys_matched_tic, 
                                           by = c("Ticker" = "tic"))
+#extracting the useful information
 SCA_filings2 <- SCA_filings2 %>%
   #making sure it is the same date range as the others
   filter(FilingYear > 2009 & FilingYear < 2015) %>%
@@ -268,6 +271,8 @@ SCA_filings2 <- SCA_filings2 %>%
   #de-duplication
   distinct(Ticker, .keep_all = TRUE)
 
+#first step in creating the indicator variable for likelihood modeling,
+#assigning Sued = Yes to every company that appears in the SCA filings data set
 SCA_filings2 <- SCA_filings2 %>% mutate(Sued = "Yes")
 
 #one last look to verify it is well formatted
@@ -278,7 +283,6 @@ length(unique(SCA_filings2$gvkey))/length(unique(SCA_filings2$Ticker))
 ```
 
 ```{r Ratings Cleaning}
-
 #Seems the data is rife with missing values, to the extent it cannot be used
 #but credit ratings seem like a variable that would be very important for predicting
 #shareholder litigation and furthermore they are the only unique variable present 
@@ -294,7 +298,7 @@ summary(ratings$datadate)
 #filtering out all the unnecessary variables and only including companies in the same
 #GIC sector as Mohawk Industries Inc. (Code 252010, Household Durables)
 ratings2 <- ratings %>% 
-  #filter(gsector == 25| gvkey %in% important_gvkey$gvkey) %>%
+  #filter(gsector == 25| gvkey %in% gvkeys_matched_tic$gvkey) %>%
   dplyr::select(gvkey, conml, splticrm, datadate, tic, gsector)
 
 #de-duplication
@@ -356,7 +360,7 @@ skimr::skim(ratings2)
 ```{r Securities Cleaning}
 #selecting the variables of interest, excluding ones like address phone number etc.
 securities2 <- securities %>% 
-  #filter(gsector == 25 | gvkey %in% important_gvkey$gvkey) %>%
+  #filter(gsector == 25 | gvkey %in% gvkeys_matched_tic$gvkey) %>%
   dplyr::select(-c(datadate, iid, conm, isalrt, primiss, spgim, 
                    spiim, spmim, curcddvm, sph100, sphcusip, sphiid, 
                    sphmid, sphname, sphsec, sphtic,
@@ -433,7 +437,7 @@ NAcheck(securities2) %>% arrange(percent_of_missing_values)
 
 ```{r Stocks Cleaning}
 #only care about gcis sector
-#stocks <- stocks %>% filter(gsector == 25 | gvkey %in% important_gvkey$gvkey)
+#stocks <- stocks %>% filter(gsector == 25 | gvkey %in% gvkeys_matched_tic$gvkey)
 
 #assessing date range
 #seems like the standard 2010-2014 range
@@ -526,7 +530,7 @@ NAcheck(stocks2) %>% arrange(percent_of_missing_values)
 #first need to limit data to one format so there isn't repeats
 #also only select companies from the Mohawk industries gsector
 fundamentals2 <- fundamentals %>% 
-  #filter(gsector == 25 | gvkey %in% important_gvkey$gvkey) %>%
+  #filter(gsector == 25 | gvkey %in% gvkeys_matched_tic$gvkey) %>%
   filter(datafmt == "STD")
 
 #assessing date range
@@ -588,31 +592,23 @@ fundamentals2[, idx] <- lapply(fundamentals2[, idx], capOutlier)
 ```
 
 ```{r Final Dataset Cleaning and Imputation for Likelihood}
-#Joining from most info dense to least ideally
- # Data <- stocks2 %>% full_join(rbind(fundamentals %>% filter(gvkey %in% important_gvkey_gs25$gvkey) %>% distinct(gvkey),
- # stocks %>% filter(gvkey %in% important_gvkey_gs25$gvkey) %>% distinct(gvkey),
- # ratings %>% filter(gvkey %in% important_gvkey_gs25$gvkey) %>% distinct(gvkey),
- # securities %>% filter(gvkey %in% important_gvkey_gs25$gvkey) %>% distinct(gvkey)) %>% distinct(gvkey), by = c("gvkey"))
-
+#
 Data <- securities2 %>% inner_join(fundamentals2, by = c("gvkey"))
 Data <- Data %>% left_join(stocks2, by = c("gvkey"))
 Data <- Data %>% left_join(ratings2, by = c("gvkey"))
 Data <- Data %>% left_join(ggroup_df %>% distinct(.keep_all = TRUE), by = c("gvkey"))
 
+#Assessing missing values
 NAcheck(Data) %>% arrange(percent_of_missing_values)
 
 #Adding the response variables
 Data <- Data %>% left_join(SCA_filings2, by = c("gvkey"))
 
-#looking at the amount of the positive case before filtering by gsector
-table(Data$Sued)
-
-#removing ticker since it was only used for joining this data frame
-Data <- Data %>% 
-  #filter(!gvkey %in% important_gvkey_notgs25$gvkey) %>% 
+#Removing ticker since it was only used for joining this data frame
+Data <- Data %>%
+  #commented out code that removes 
+  #filter(!gvkey %in% gvkeys_matched_tic_notgs25$gvkey) %>% 
   dplyr::select(-c(Ticker, FilingYear))
-#assessing the amount of pos obs
-#Data
 
 #Adding the "No"s for the indicator variable
 Data$Sued <- ifelse(is.na(Data$Sued), "No", "Yes")
@@ -629,13 +625,12 @@ Data <- NAcull(Data)
 #aggr_plot <- aggr(Data, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(data), cex.axis=.7, gap=3, ylab=c("Histogram of missing #data","Pattern"))
 
 #running in parallel to speed up performance
-#also setting a seed for reproducible
-#results in parallel
+#also setting a seed for reproducible results in parallel
 doParallel::registerDoParallel()
 set.seed(123, kind = "L'Ecuyer-CMRG")
 
 #Saving settlement data so it can be removed and reattached
-#so it isn't imputed
+#so it isn't accidentally imputed
 Data_Settle <- Data %>% dplyr::select(gvkey)
 Data <- Data %>% dplyr::select(-gvkey)
 Data <- as.data.frame(Data)
@@ -648,24 +643,23 @@ Data_imputed <- missForest(Data,
                            verbose = TRUE, 
                            maxiter = 1, 
                            ntree = 50)
+#assessing imputation error
 Data_imputed$OOBerror
 
-#checking the imputed data
+#checking to make sure that the data is properly imputed
 Best_impute <- Data_imputed$ximp
 NAcheck(Best_impute)
 
 #reattaching settlement amount data after imputation
 Data <- cbind(Data_Settle, Best_impute)
 
-#making sure everything looks good
-head(Data)
-
 #calculating Sued class imbalance
 sum(Data$Sued == "Yes")/sum(Data$Sued == "No")
-count(Data)
 
 #removing Mohawk Industries Observation to predict later
 Mohawk_Obs <- Data %>% filter(gvkey == "025119")
+
+#making sure the Mohawk Industries observation is properly saved
 Mohawk_Obs
 
 #removing Mohawk Industries Observation so it isn't used in either
@@ -765,7 +759,7 @@ metrics <- metric_set(yardstick::accuracy, yardstick::mn_log_loss, yardstick::sp
 ```
 
 ### Quantitative Analysis
->Predicting the cost of shareholder litigation
+Predicting the cost of shareholder litigation
 
 ```{r lr_model}
 #logistic regression model specifications
