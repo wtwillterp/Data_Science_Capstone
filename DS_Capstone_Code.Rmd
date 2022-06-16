@@ -40,11 +40,13 @@ library(rfUtilities)
 library(verification)
 library(measures)
 library(betacal)
+#be more rigorous about necessary dependencies in the future
 
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-#Data Science Capstone Project
+# Data Science Capstone Project
+
 The purpose of this project is to create data derived estimates of the likelihood and severity of SCA litigation against Mohawk Industries Inc.
 
 ```{r Load Data}
@@ -64,32 +66,29 @@ datDict <- read_csv("Data Dictionary.csv")
 #its GICS group is 2520
 ```
 
-### Data Cleaning and Feature Engineering
+## Data Cleaning and Feature Engineering
 
 ```{r Data Cleaning Functions}
 #creating a function to check for NAs
 NAcheck <- function(df) {
   names <- c()
   percent_of_missing_values <- c()
-  for(i in 1:ncol(df)) {       # for-loop over columns
-    #which checks for columns that have over 33% of data missing,
-    #adding the column names and the respective amount of NAs to vectors
-   # if(sum(is.na(df[,i])) > nrow(data)/3){
+  for(i in 1:ncol(df)) { # for-loop over columns in the data frame
+    
+    #adding the name of each column to a vector
     names <- append(names, colnames(df[i]))
+    #adding the amount of missing values of each column to a vector
     percent_of_missing_values <- append(percent_of_missing_values, sum(is.na(df[,i]))/nrow(df))
- # }
   }
-  #creating a data frame of the columns with too many missing values and amounts
-  output.df <- data.frame(names, percent_of_missing_values)
-  #finally outputting it
-  output.df
+  #using the two vectors to output a data frame 
+  #with the names of columns and their amount of missing values
+  data.frame(names, percent_of_missing_values)
 }
 
 #creating a function to cull columns that have more missing values than a threshold
 NAcull <- function(df, threshold = .20, exception = c("")){
   #threshold is the percentage of tolerable NAs
   #if a column has a higher percentage of NAs then it is culled
-  #default is 33%
   if(threshold > 1){
     stop('threshold must be less than 1, 33% NAs allowed is default')
   }
@@ -110,7 +109,7 @@ NAcull <- function(df, threshold = .20, exception = c("")){
   output.df
 }
 
-#function that use quantiles to cap a column's values via IQR method
+#function that use quantiles to cap a column's values via 1.5*IQR method
 capOutlierIQR <- function(x){
    Q1 <- quantile(x, .25, na.rm = TRUE)
    Q3 <- quantile(x, .75, na.rm = TRUE)
@@ -276,10 +275,7 @@ SCA_filings2 <- SCA_filings2 %>%
 SCA_filings2 <- SCA_filings2 %>% mutate(Sued = "Yes")
 
 #one last look to verify it is well formatted
-skimr::skim(SCA_filings2)
-
-#looking at the ratio of gvkeys to Tickers
-length(unique(SCA_filings2$gvkey))/length(unique(SCA_filings2$Ticker))
+#skimr::skim(SCA_filings2)
 ```
 
 ```{r Ratings Cleaning}
@@ -298,7 +294,7 @@ summary(ratings$datadate)
 #filtering out all the unnecessary variables and only including companies in the same
 #GIC sector as Mohawk Industries Inc. (Code 252010, Household Durables)
 ratings2 <- ratings %>% 
-  #filter(gsector == 25| gvkey %in% gvkeys_matched_tic$gvkey) %>%
+  #filter(gsector == 25| gvkey %in% gvkeys_matched_tic$gvkey) %>% #old code to filter by gsector
   dplyr::select(gvkey, conml, splticrm, datadate, tic, gsector)
 
 #de-duplication
@@ -335,46 +331,46 @@ ratings2 <- ratings2 %>%
                         splticrm == "AA+"  ~ "20",
                         splticrm == "AAA"  ~ "21",
                         TRUE  ~ "NA"))
+
 #making sure R recognizes the column data is now num not chr
 ratings2 <- ratings2 %>% mutate(splticrm = as.numeric(splticrm))
 summary(ratings2$splticrm)
 
-#but first since the data occurs over a time span and time series data is tricky
+#Since the data occurs over a time span and time series data is tricky
 #for the models I know how to use (since it is generally auto correlated)
 #I address this by condensing credit rating to the mean and standard deviation
 #across the given time span
+#all data is technically time series data anyways
 ratings2 <- ratings2 %>% group_by(gvkey) %>% mutate(splticrm_avg = mean(splticrm, na.rm = TRUE)) %>% 
   mutate(splticrm_sd = sd(splticrm, na.rm = TRUE))
 
-#finally condensing the data since we are taking a mean per gvkey
+#selecting only teh variables of interest
 ratings2 <- ratings2 %>% dplyr::select(gvkey, splticrm_avg, splticrm_sd) %>% distinct(gvkey, .keep_all = TRUE)
 
 #assessing NAs
 NAcheck(ratings2)
 
-ratings2 <- ratings2 %>% ungroup()
 #seems everything worked, and the data is ready to be joined to other data sets
-skimr::skim(ratings2)
+#skimr::skim(ratings2)
 ```
 
 ```{r Securities Cleaning}
-#selecting the variables of interest, excluding ones like address phone number etc.
-securities2 <- securities %>% 
-  #filter(gsector == 25 | gvkey %in% gvkeys_matched_tic$gvkey) %>%
+#selecting the variables of interest, excluding ones like address, phone number, etc.
+securities2 <- securities %>%
+  #filter(gsector == 25 | gvkey %in% gvkeys_matched_tic$gvkey) %>% #old code to filter by gsector
   dplyr::select(-c(datadate, iid, conm, isalrt, primiss, spgim, 
                    spiim, spmim, curcddvm, sph100, sphcusip, sphiid, 
                    sphmid, sphname, sphsec, sphtic,
                    cyear, mkvalincl, exchg, tpci, city, cmth, conml, costat,
                    ggroup, gind, gsector, gsubind, loc, naics, sic, state))
 
-#casting a factor as a factor
+#correcting a categorical variable's data type
 securities2$curcdm <- as.factor(securities2$curcdm)
-summary(securities2$curcdm)
 
 #assessing data completion
 NAcheck(securities2) %>% arrange(percent_of_missing_values)
 
-#assessing date range
+#assessing data date range
 #seems like the standard 2010-2014 range
 #securities2$datadate <- strptime(securities2$datadate, format = "%m/%d/%Y")
 #summary(securities2$datadate)
@@ -386,17 +382,20 @@ securities2 <-  securities2 %>% distinct(.keep_all = TRUE)
 securities2 %>% group_by(gvkey) %>% summarise(na = sum(is.na(dvrate))) %>% ggplot(aes(x=na)) + geom_histogram()
 securities2 %>% ungroup()
 
-#now to address the fact this is data over a date range, I'm going to have to
+#Now to address the fact this is data over a date range, I'm going to have to
 #summarize the data, essentially use functions to condense it into a single
-#data point per variable per company, so I decided to use mean and
-#standard deviations, to capture variation
+#observation per company.
+#Numeric variables are summarized as their mean and standard deviation
+#Nominal categorical variables are summarized by their mode
+#Ordinal categorical variables are transformed into numeric variables then
+#also summarized by their mean and standard deviation
 securities2 <- securities2 %>% group_by(gvkey) %>%
    summarise_if(is.numeric, list(avg = na_rm_mean, sd = na_rm_sd))
 
 #checking variables with a suspicious amount of 0s
 lapply(securities2, function(x){ length(which(x==0))/length(x)})
 
-# #removing variables with too many missing values
+#removing variables with too many missing values
  securities2 <- NAcull(securities2)
  NAcheck(securities2)
 
@@ -421,14 +420,17 @@ securities2[, idx] <- lapply(securities2[, idx], capOutlier)
 securities2 <- securities2 %>% 
   mutate_at(.vars = c("cshtrm_avg", "cshtrm_sd", "prchm_avg", "prchm_sd", "trt1m_avg", "trt1m_sd"), 
             .funs = list(log = king_log))
+
+#adding new features
 securities2 <- securities2 %>% 
   #adding a new feature, share turnover, monthly
   mutate(shrtrn_m_avg = cshtrm_avg/cshom_avg) %>%
   #adding a new feature, highest and lowest share price difference monthly
   mutate(prchl_m_diff = prchm_avg - prclm_avg) %>%
+  #replacing NaNs with NAs
   mutate_all(function(x) ifelse(is.nan(x), NA, x))
   
-#assessing NAs
+#assessing missing values
 NAcheck(securities2) %>% arrange(percent_of_missing_values)
 
 #verifying the data is in the format I want
@@ -437,14 +439,14 @@ NAcheck(securities2) %>% arrange(percent_of_missing_values)
 
 ```{r Stocks Cleaning}
 #only care about gcis sector
-#stocks <- stocks %>% filter(gsector == 25 | gvkey %in% gvkeys_matched_tic$gvkey)
+#stocks <- stocks %>% filter(gsector == 25 | gvkey %in% gvkeys_matched_tic$gvkey) #old code to filter by gsector
 
 #assessing date range
 #seems like the standard 2010-2014 range
 #stocks$datadate <- strptime(stocks$datadate, format = "%m/%d/%Y")
 #summary(stocks2$datadate)
 
-#also removing irrelevant columns like phone, company name, address
+#removing irrelevant columns like phone, company name, address
 stocks2 <- stocks[,c(1, 8:11, 13, 14, 24, 26:29, 31:37, 73)]
 
 #setting data misidentified as numeric to factors
@@ -460,23 +462,20 @@ stocks2 <-  stocks2 %>% distinct(.keep_all = TRUE)
 lapply(stocks2, function(x){ length(which(x==0))/length(x)})
 
 #seems like a potentially suspicious amount of 0s are in cshtrd based on the
-#log distribution, but ultimately looking at the data a bit it seems plausible 
+#log distribution, but ultimately it seems plausible 
 #that some stocks just don't have shares traded often
 ggplot(stocks2, aes(x=  sign(stocks2$cshtrd)*log(abs(stocks2$cshtrd)+1))) + 
-        geom_histogram(fill="#69b3a2", color="#e9ecef", alpha=0.9) +
+  geom_histogram(fill="#69b3a2", color="#e9ecef", alpha=0.9) +
   labs(title = "Transformation Identifying Potential NAs", x = "Log(cshtrd)", y = "Count")
 
-#now I can use this function to summarize the numeric data
-#again condensing the date range by taking the mean and standard deviation
-#of each numeric variable
+#once again condensing the numeric data so there is one observation per company (gvkey)
 stocks_num <- stocks2 %>% group_by(gvkey) %>%
    summarise_if(is.numeric, list(avg = na_rm_mean, sd = na_rm_sd))
 
-#looking at NAs
+#looking at missing values
 NAcheck(stocks_num) %>% arrange(percent_of_missing_values)
 
-# #removing columns with excessive NAs after each observation corresponds to
-# #a company
+#removing columns with excessive missing values after each observation corresponds to a company
  stocks_num <- stocks_num %>% ungroup() %>% NAcull(threshold = .4)
  NAcheck(stocks_num)
 
@@ -507,6 +506,7 @@ stocks_num <- stocks_num %>%
   #adding a new feature, share turnover daily
   mutate(shrtrn_d_avg = cshtrd_avg/cshoc_avg)
 
+#replacing NaNs with NAs
 stocks_num <- stocks_num %>% mutate_all(function(x) ifelse(is.nan(x), NA, x))
 
 #also collapsing the date range for factors by taking the mode 
@@ -519,7 +519,7 @@ stocks_fac %>% ungroup()
 #combining the collapsed numeric and factor data sets
 stocks2 <- stocks_num %>% left_join(stocks_fac, by = c("gvkey"))
 
-#assessing NAs one last time
+#assessing the amount of missing values one last time
 NAcheck(stocks2) %>% arrange(percent_of_missing_values)
 
 #verifying the data is in the format I want
@@ -528,15 +528,14 @@ NAcheck(stocks2) %>% arrange(percent_of_missing_values)
 
 ```{r Fundamentals Cleaning}
 #first need to limit data to one format so there isn't repeats
-#also only select companies from the Mohawk industries gsector
 fundamentals2 <- fundamentals %>% 
-  #filter(gsector == 25 | gvkey %in% gvkeys_matched_tic$gvkey) %>%
+  #filter(gsector == 25 | gvkey %in% gvkeys_matched_tic$gvkey) %>% #old code to filter by gsector
   filter(datafmt == "STD")
 
 #assessing date range
 #in sync with all the others
-fundamentals2$datadate <- strptime(fundamentals2$datadate, format = "%m/%d/%Y")
-summary(fundamentals2$datadate)
+# fundamentals2$datadate <- strptime(fundamentals2$datadate, format = "%m/%d/%Y")
+# summary(fundamentals2$datadate)
 
 #de-duplication
 fundamentals2 <-  fundamentals2 %>% distinct(.keep_all = TRUE)
@@ -564,7 +563,6 @@ fund_factors <- fundamentals2 %>%
 str(fund_factors)
 
 #summarizing the numeric variables
-#could add standard deviations later to capture variance
 fund_num <- fundamentals2 %>%
   group_by(gvkey) %>%
   summarise_if(is.numeric, list(avg = na_rm_mean, sd = na_rm_sd))
@@ -576,23 +574,30 @@ fund_num <- fund_num %>% mutate(PE_ratio_avg = epspx_avg/prcc_c_avg)
 fund_num <- fund_num %>% mutate(pchl_fy_diff = prcl_f_avg - prch_f_avg)
 #share turnover
 fund_num <- fund_num %>% mutate(shrtrn_f_avg = cshtr_f_avg/csho_avg)
+#replacing any NaNs with NAs
 fund_num <- fund_num %>% mutate_all(function(x) ifelse(is.nan(x), NA, x))
 
 #joining the summarized numeric and factor variables
 fundamentals2 <- fund_factors %>% left_join(fund_num, by = c("gvkey"))
-
-# #assessing NAs before and after removing variables with too many NAs
-# fundamentals2 %>% NAcheck() %>% arrange(percent_of_missing_values)
-# fundamentals2 <- NAcull(fundamentals2)
-# fundamentals2 %>% NAcheck() %>% arrange(percent_of_missing_values)
 
 #capping outliers
 idx <- sapply(fundamentals2, class)== "numeric"
 fundamentals2[, idx] <- lapply(fundamentals2[, idx], capOutlier)
 ```
 
+## Likelihood Modeling
+
+#### Predicting the likelihood of SCA litigation for Mohawk Industries Inc.
+
+The best model was selected using k-folds cross validation on the training set. It was then calibrated using k-folds cross validation and had its final performance assessed on a held out test set.
+
+#### Final data set creation with missing value imputation using MissForest.
+MissForest imputation was selected as the missing value imputation method because it is a robust imputation method that is nonparametric, can handle numeric and categorical variables, is computationally inexpensive, can handle high dimensionality, and provides error estimates using OOB error.
+
 ```{r Final Dataset Cleaning and Imputation for Likelihood}
-#
+#creating the final likelihood data set
+#inner joining the most information dense and rigorously reported data sets
+#left joining the rest
 Data <- securities2 %>% inner_join(fundamentals2, by = c("gvkey"))
 Data <- Data %>% left_join(stocks2, by = c("gvkey"))
 Data <- Data %>% left_join(ratings2, by = c("gvkey"))
@@ -606,8 +611,8 @@ Data <- Data %>% left_join(SCA_filings2, by = c("gvkey"))
 
 #Removing ticker since it was only used for joining this data frame
 Data <- Data %>%
-  #commented out code that removes 
-  #filter(!gvkey %in% gvkeys_matched_tic_notgs25$gvkey) %>% 
+  #old code for removing observations that weren't in gsector 25
+  #filter(!gvkey %in% gvkeys_matched_tic_notgs25$gvkey) %>%
   dplyr::select(-c(Ticker, FilingYear))
 
 #Adding the "No"s for the indicator variable
@@ -619,6 +624,7 @@ summary(Data$Sued)
 #checking NAs, quite a lot
 NAcheck(Data) %>% arrange(percent_of_missing_values)
 
+#removing NAs
 Data <- NAcull(Data)
 
 #visualizing missing data to help with MAR assessment
@@ -667,10 +673,12 @@ Mohawk_Obs
 Data <- Data %>% filter(gvkey != "025119")
 ```
 
+#### The Boruta Algorithm was used for feature selection.
+
 ```{r Boruta Feature Selection for Likelihood}
 #to select features from the >200 predictor model
-#change this from doing it on the full data set to just the training set
-#since this sequence of feature selection may cause an info leak
+#ideally this would be nested within each cross validation fold of the model
+#building procedure but that was not computationally viable
 
 set.seed(111)
 
@@ -684,27 +692,30 @@ print(boruta)
 plot(boruta, las = 2, cex.axis = 0.7)
 attStats(boruta) %>% arrange(desc(meanImp))
 
-#tentative rough
+#tentative rough fix deals with attributes that are still tentative features
+#after maxRuns is reached
 final_boruta <- TentativeRoughFix(boruta)
 features_selected <- getSelectedAttributes(boruta)
 features_selected <- c(features_selected, "Sued", "gvkey")
 features_selected
 #plotting the top 10% of variables by mean importance in regards to being sued
 attStats(boruta) %>%
-  mutate(Variable = rownames(attStats(boruta))) %>% 
-    dplyr::filter(meanImp > quantile(attStats(boruta)$meanImp, .50)) %>%
-   mutate(Boruta_Mean_Importance = meanImp,
-    Variable = fct_reorder(Variable, meanImp)) %>%
+  mutate(Variable = rownames(attStats(boruta))) %>%
+  dplyr::filter(meanImp > quantile(attStats(boruta)$meanImp, .50)) %>%
+  mutate(Boruta_Mean_Importance = meanImp,
+         Variable = fct_reorder(Variable, meanImp)) %>%
   ggplot(aes(x = Boruta_Mean_Importance, y = Variable)) +
   geom_col(fill = "paleturquoise3") +
   labs(title = "Top 5% Most Important Variable for Sued as Response", y = NULL)
 ```
 
+#### A tidymodels recipe was used to remove all zero variance variables, normalize the data, and one hot encode all categorical variables.
+
 ```{r Likelihood Generic Preprocessing}
+#Generic tidymodels recipe for pre-processing likelihood data
+
 #assessing correlations for potential interactions
 #corrplot::corrplot(cor(as.matrix(Data[features_selected] %>% dplyr::select_if(is.numeric))))
-
-#Generic tidymodels recipe for pre-processing likelihood data
 
 #formula for identifying predictors
 Data_rec <- recipe(Sued ~ ., data = Data[,features_selected]) %>%
@@ -744,6 +755,8 @@ Data_folds <- vfold_cv(Data_train, v = 5, strata = Sued)
 Data_cal_folds <- vfold_cv(Data_train, strata = Sued, v = 5)
 ```
 
+#### Log-loss was used as the model evaluation metric since ideally we want a model that not only labels well but produces well calibrated probabilities.
+
 ```{r Tidymodels Generic Work Flow}
 #generic work flow
 Data_wf <- workflow() %>%
@@ -758,24 +771,21 @@ get_model <- function(x) {
 metrics <- metric_set(yardstick::accuracy, yardstick::mn_log_loss, yardstick::specificity, yardstick::precision, yardstick::recall, yardstick::roc_auc)
 ```
 
-### Quantitative Analysis
-Predicting the cost of shareholder litigation
+#### Performing the flat stratified k-fold cross validation procedure for model selection. 
 
 ```{r lr_model}
 #logistic regression model specifications
 #mixture 1 indicates this is a pure lasso model
 #thus variable selection is performed
-lr_spec <-
-  logistic_reg(penalty = tune(), mixture = 1) %>% 
+lr_spec <- logistic_reg(penalty = tune(), mixture = 1) %>% 
   #important to set family to binomial since this is a classification problem
   set_engine("glmnet", family="binomial")
 
 #grid for tuning the penalty of the logistic regression model
 lr_grid <- tibble(penalty = 10^seq(3, -4, length.out = 40))
 
-#tuning the model using ten fold cross validation
-lr_tune_results <- 
-  Data_wf %>%
+#tuning the model using k-folds cross validation
+lr_tune_results <- Data_wf %>%
   add_model(lr_spec) %>% 
   tune_grid(Data_folds,
             grid = lr_grid,
@@ -807,14 +817,12 @@ highlight_df <- lr_tune_results %>%
 #selecting the best model
 #since we care about the underlying probability rather than label
 #I use log loss to determine the best model
-lr_best <- 
-  lr_tune_results %>%
+lr_best <- lr_tune_results %>%
   select_best("mn_log_loss")
 
 #collecting the predictions of the best model
 #and mutating the column to identify the kind of model
-lr_train_best_pred <- 
-  lr_tune_results %>% 
+lr_train_best_pred <- lr_tune_results %>% 
   collect_predictions(parameters = lr_best) %>%
   mutate(model = "Logistic Regression")
 
@@ -841,6 +849,7 @@ lr_best_thresh_dat2 <- lr_train_best_pred %>%
   filter(.config == lr_best$.config) %>%
   roc_curve(Sued, .pred_Yes) %>%
   mutate("Bal_Acc" = (specificity + sensitivity)/2)
+
 #saving the best threshold using balanced accuracy
 lr_best_thresh_BA <- lr_best_thresh_dat2 %>% filter(Bal_Acc == max(Bal_Acc, na.rm = TRUE))
 lr_best_thresh_BA <- lr_best_thresh_BA$.threshold
@@ -848,6 +857,7 @@ lr_best_thresh_BA <- lr_best_thresh_BA$.threshold
 #saving the ideal threshold using the F2 measure
 lr_best_thresh <- lr_best_thresh_dat %>% filter(Fbeta_Measure == "F2 Measure") %>% filter(value >= max(value, na.rm = TRUE))
 lr_best_thresh <- lr_best_thresh$.threshold
+
 #plot of thresholds
 lr_best_thresh_dat %>%
   ggplot(aes(x = .threshold, y = value, color = Fbeta_Measure)) +
@@ -873,12 +883,12 @@ lr_tune_results %>%
   filter(.config == lr_best$.config)
 
 #finalizing logistic regression work flow with the best hyper parameters
-lr_wf <- Data_wf %>%
-  add_model(lr_spec)
+lr_wf <- Data_wf %>% add_model(lr_spec)
 final_lr <- finalize_workflow(lr_wf, lr_best)
 
 #performing the last fit
 final_lr_test_results <- last_fit(final_lr, Data_split, metrics = metrics)
+
 #collecting the final predictions
 collect_metrics(final_lr_test_results)
 ```
@@ -887,15 +897,14 @@ collect_metrics(final_lr_test_results)
 set.seed(345)
 
 #random forest tuneable model specifications
-rf_spec <- 
-  rand_forest(mtry = tune(), min_n = tune()) %>% 
+rf_spec <- rand_forest(mtry = tune(), min_n = tune()) %>%
+  #mtry is the number of variables randomly sampled as candidates at each split
+  #min_n is the number of trees to build (from which classification is decided)
   set_engine("randomForest", num.threads = parallel::detectCores()) %>% 
   set_mode("classification")
 
-#mtry is the number of variables randomly sampled as candidates at each split
-#while n is the number of trees to build (from which classification is decided)
-rf_tune_results <-
-  Data_wf %>%
+#tuning procedure using k-folds cross validation
+rf_tune_results <- Data_wf %>%
   add_model(rf_spec) %>% 
   tune_grid(Data_folds,
             grid = 25, #25 candidate models
@@ -906,16 +915,17 @@ rf_tune_results <-
 #rather than labels I go with mn_log_loss
 rf_tune_results %>% 
   show_best(metric = "mn_log_loss")
+
+#visualizing tune results
 autoplot(rf_tune_results)
 
-rf_best <- 
-  rf_tune_results %>% 
-      select_best("mn_log_loss")
+#selecting the best model by optimal log loss
+rf_best <- rf_tune_results %>% 
+  select_best("mn_log_loss")
 
 #collecting the predictions of the best model
 #and mutating the column to identify the kind of model
-rf_train_best_pred <- 
-  rf_tune_results %>% 
+rf_train_best_pred <- rf_tune_results %>% 
   collect_predictions(parameters = rf_best) %>%
   mutate(model = "Random Forest")
 
@@ -948,6 +958,7 @@ rf_best_thresh_dat2 <- rf_train_best_pred %>%
   filter(.config == rf_best$.config) %>%
   roc_curve(Sued, .pred_Yes) %>%
   mutate("Bal_Acc" = (specificity + sensitivity)/2)
+
 #saving the best threshold using balanced accuracy
 rf_best_thresh_BA <- rf_best_thresh_dat2 %>% filter(Bal_Acc == max(Bal_Acc, na.rm = TRUE))
 rf_best_thresh_BA <- rf_best_thresh_BA$.threshold
@@ -955,6 +966,7 @@ rf_best_thresh_BA <- rf_best_thresh_BA$.threshold
 #saving the ideal threshold using F2 measure
 rf_best_thresh <- rf_best_thresh_dat %>% filter(Fbeta_Measure == "F2 Measure") %>% filter(value == max(value, na.rm = TRUE))
 rf_best_thresh <- rf_best_thresh$.threshold
+
 #plot of thresholds
 rf_best_thresh_dat %>%
   ggplot(aes(x = .threshold, y = value, color = Fbeta_Measure)) +
@@ -975,16 +987,17 @@ rf_tune_results %>%
   conf_mat(Sued, .pred_class)
   
 #the metrics of the best rf model on the train set
-  rf_tune_results %>% 
+rf_tune_results %>% 
   collect_metrics() %>%
   filter(.config == rf_best$.config)
 
 #finalizing work flow
-rf_wf <- Data_wf %>%
-  add_model(rf_spec)
+rf_wf <- Data_wf %>% add_model(rf_spec)
 final_rf <- finalize_workflow(rf_wf, rf_best)
+
 #performing the last fit
 final_xgb_test_results <- last_fit(final_rf, Data_split, metrics = metrics)
+
 # collecting the final predictions
 collect_metrics(final_xgb_test_results)
 ```
@@ -1004,7 +1017,7 @@ xgb_spec <- boost_tree(
   set_engine("xgboost") %>% 
   set_mode("classification")
 
-#for tuning
+#for tuning, a grid design that tries to maximize coverage of feature space
 xgb_grid <- grid_latin_hypercube(
   tree_depth(),
   min_n(),
@@ -1015,6 +1028,7 @@ xgb_grid <- grid_latin_hypercube(
   size = 40
 )
 
+#tuning procedure using k-folds cross validation
 xgb_tune_results <- Data_wf %>%
   add_model(xgb_spec) %>%
   tune_grid(resamples = Data_folds,
@@ -1023,6 +1037,7 @@ xgb_tune_results <- Data_wf %>%
   control = control_grid(save_pred = TRUE)
 )
 
+#visualizing tune results
 xgb_tune_results %>%
   collect_metrics() %>%
   filter(.metric == "mn_log_loss") %>%
@@ -1036,14 +1051,12 @@ xgb_tune_results %>%
   labs(x = NULL, y = "mn_log_loss")
 
 #selecting the best model
-xgb_best <- 
-  xgb_tune_results %>% 
+xgb_best <- xgb_tune_results %>% 
    select_best("mn_log_loss")
 
 #collecting the predictions of the best model
 #and mutating the column to identify the kind of model
-xgb_train_best_pred <- 
-  xgb_tune_results %>% 
+xgb_train_best_pred <- xgb_tune_results %>% 
   collect_predictions(parameters = xgb_best) %>%
   mutate(model = "XGBoost")
 
@@ -1070,6 +1083,7 @@ xgb_best_thresh_dat2 <- xgb_train_best_pred %>%
   filter(.config == xgb_best$.config) %>%
   roc_curve(Sued, .pred_Yes) %>%
   mutate("Bal_Acc" = (specificity + sensitivity)/2)
+
 #saving the best threshold using balanced accuracy
 xgb_best_thresh_BA <- xgb_best_thresh_dat2 %>% filter(Bal_Acc == max(Bal_Acc, na.rm = TRUE))
 xgb_best_thresh_BA <- xgb_best_thresh_BA$.threshold
@@ -1077,6 +1091,7 @@ xgb_best_thresh_BA <- xgb_best_thresh_BA$.threshold
 #saving the ideal threshold using F2 measure
 xgb_best_thresh <- xgb_best_thresh_dat %>% filter(Fbeta_Measure == "F2 Measure") %>% filter(value == max(value, na.rm = TRUE))
 xgb_best_thresh <- xgb_best_thresh$.threshold
+
 #plot of thresholds
 xgb_best_thresh_dat %>%
   ggplot(aes(x = .threshold, y = value, color = Fbeta_Measure)) +
@@ -1102,17 +1117,18 @@ xgb_tune_results %>%
   filter(.config == xgb_best$.config)
 
 #finalizing xgb work flow with the best hyper parameters
-xgb_wf <- Data_wf %>%
-  add_model(xgb_spec)
+xgb_wf <- Data_wf %>% add_model(xgb_spec)
 final_xgb <- finalize_workflow(xgb_wf, xgb_best)
+
 #performing the last fit
 final_xgb_test_results <- last_fit(final_xgb, Data_split, metrics = metrics)
+
 #collecting the final predictions
 collect_metrics(final_xgb_test_results)
 ```
 
 ```{r knn_model}
-#probably necessary for random tie-breaking
+#might be necessary for random tie-breaking
 set.seed(345)
 
 #K-nearest neighbors spec
@@ -1121,13 +1137,11 @@ knn_spec <-
   set_engine("kknn") %>% 
   set_mode("classification")
 
-#grid for tuning
+#grid for tuning, only thing to tune is the # of neighbors
 knn_grid <- tibble(neighbors = c(1:29, seq(from = 30, to = 100, by = 10), seq(from = 120, to = 200, by = 20)))
 
-#tuning the model
-#only thing to tune is the # of neighbors
-knn_tune_results <- 
-  Data_wf %>%
+#tuning the model using k-folds cross validation
+knn_tune_results <- Data_wf %>%
   add_model(knn_spec) %>% 
   tune_grid(Data_folds,
             grid = knn_grid,
@@ -1141,8 +1155,7 @@ highlight_df <- knn_tune_results %>%
   filter(mean == min(mean))
 
 #plotting all models by mn_log_loss
-knn_plot <- 
-  knn_tune_results %>% 
+knn_plot <- knn_tune_results %>% 
   collect_metrics() %>%
   filter(.metric == "mn_log_loss") %>%
   ggplot(aes(x = neighbors, y = mean)) + 
@@ -1163,8 +1176,7 @@ knn_best <- select_best(knn_tune_results, metric = "mn_log_loss")
 knn_best
 
 #collecting the predictions of the best knn model
-knn_train_best_pred <- 
-  knn_tune_results %>% 
+knn_train_best_pred <- knn_tune_results %>% 
   collect_predictions(parameters = knn_best) %>%
   mutate(model = "K-Nearest Neighbors")
 
@@ -1191,6 +1203,7 @@ knn_best_thresh_dat2 <- knn_train_best_pred %>%
   filter(.config == knn_best$.config) %>%
   roc_curve(Sued, .pred_Yes) %>%
   mutate("Bal_Acc" = (specificity + sensitivity)/2)
+
 #saving the best threshold using balanced accuracy
 knn_best_thresh_BA <- knn_best_thresh_dat2 %>% filter(Bal_Acc == max(Bal_Acc, na.rm = TRUE))
 knn_best_thresh_BA <- knn_best_thresh_BA$.threshold
@@ -1198,6 +1211,7 @@ knn_best_thresh_BA <- knn_best_thresh_BA$.threshold
 #saving the ideal threshold using F2 measure
 knn_best_thresh <- knn_best_thresh_dat %>% filter(Fbeta_Measure == "F2 Measure") %>% filter(value == max(value, na.rm = TRUE))
 knn_best_thresh <- knn_best_thresh$.threshold
+
 #plot of thresholds
 knn_best_thresh_dat %>%
   ggplot(aes(x = .threshold, y = value, color = Fbeta_Measure)) +
@@ -1224,17 +1238,18 @@ knn_tune_results %>%
 knn_wf <- Data_wf %>%
   add_model(knn_spec)
 final_knn <- finalize_workflow(knn_wf, knn_best)
+
 #performing the last fit
 final_knn_test_results <- last_fit(final_knn, Data_split, metrics = metrics)
+
 #collecting the final predictions
 collect_metrics(final_knn_test_results)
 ```
 
-```{r Likelihood Model Training Dataset Graphs and Metrics}
-#lr_tune_results %>% collect_metrics() %>% 
-# dplyr::filter(.config == lr_tune_results %>% 
-#                 select_best(metric = "kap") %>% pull()) %>% mutate(model = "Logistic Regression")
+#### Comparing the best model of each algorithm.
 
+```{r Likelihood Model Training Dataset Graphs and Metrics}
+#creating a data set of the predictions of the best models
 Like_mdl_pred_train <- bind_rows(lr_train_best_pred,
                                  rf_train_best_pred,
                                  xgb_train_best_pred,
@@ -1269,10 +1284,7 @@ Like_mdl_pred_train %>%
   scale_x_continuous(labels = scales::percent) + 
   coord_cartesian(xlim=c(0,1), ylim=c(0,1),)
 
-#seems like they are all fairly close
-#but AUC is not the best comparison when we are more concerned about 
-#more than just the classification ranking
-#but the accuracy of the likelihood probabilities underlying them
+#But more important than a ranking metric like AUC is a probability metric like logloss
 
 #create a data frame with all the best models' metrics (best by lowest mn_log_loss)
 Like_mdl_met_train_ll <- bind_rows(lr_tune_results %>% collect_metrics(summarise = TRUE) %>% 
@@ -1281,7 +1293,8 @@ Like_mdl_met_train_ll <- bind_rows(lr_tune_results %>% collect_metrics(summarise
                                    dplyr::filter(.config == rf_tune_results %>% select_best("mn_log_loss") %>% pull()) %>% mutate(model = "Random Forest"),
                                  xgb_tune_results %>% collect_metrics(summarise = TRUE) %>% 
                                    dplyr::filter(.config == xgb_tune_results %>% select_best("mn_log_loss") %>% pull()) %>% mutate(model = "XGBoost"),
-                                 knn_tune_results %>% collect_metrics(summarise = TRUE) %>% dplyr::filter(.config == knn_tune_results %>% select_best("mn_log_loss") %>% pull()) %>% mutate(model = "K-Nearest Neighbors")
+                                 knn_tune_results %>% collect_metrics(summarise = TRUE) %>% 
+                                   dplyr::filter(.config == knn_tune_results %>% select_best("mn_log_loss") %>% pull()) %>% mutate(model = "K-Nearest Neighbors")
                                  )
 
 #comparing metrics of the best models
@@ -1421,12 +1434,12 @@ p12 <- knn_tune_results %>%
   scale_fill_stepsn( colors = c("white", "#F8766D"), breaks = c(35, 100, 300)) +
   theme(panel.border = element_rect(colour = "#F8766D", fill=NA, size= 1))
 
-#plotting the confusion matrices
+#plotting the confusion matrices with different cross-validated thresholds
 grid.arrange(p1, p2, p3, p4, nrow = 2)
 grid.arrange(p5, p6, p7, p8, nrow = 2)
 grid.arrange(p9, p10, p11, p12, nrow = 2)
 
-#.218 is the non-informative value of log loss
+#calculating the log loss of the reference model
 ll_baseline <- rf_tune_results %>% 
   collect_predictions() %>%
   filter(.config == rf_best$.config) %>%
@@ -1435,7 +1448,6 @@ ll_baseline <- rf_tune_results %>%
   pull(.estimate)
 
 #all models beat the baseline
-#it is clear random forest is a much better classifier
 Like_mdl_met_train_ll %>% 
   arrange(mean_mn_log_loss, decreasing = TRUE) %>%
   bind_rows(data.frame(model= "Non-Informative Baseline", mean_mn_log_loss = ll_baseline)) %>%
@@ -1454,10 +1466,12 @@ Like_mdl_met_train_ll %>%
   labs(title = "Best Model by Cross-Validated Log Loss", x = "Model", y = "Log Loss")
 ```
 
+#### Using the test set to assess generalization performance of the best model.
+
 ```{r Best Likelihood Model Test Dataset Graphs and Metrics}
 #collecting predictions on the test data of the final model
 #and mutating a column to identify model type
-# create a dataframe with all the best models metrics
+#creating a dataframe with all the best models metrics
 Like_mdl_met_test <- bind_rows(final_lr_test_results %>% collect_metrics(summarise = TRUE) %>% mutate(model = "Logistic Regression"),
                                final_xgb_test_results %>% collect_metrics(summarise = TRUE) %>% mutate(model = "Random Forest"),
                                final_xgb_test_results %>% collect_metrics(summarise = TRUE) %>% mutate(model = "XGBoost"),
@@ -1477,28 +1491,6 @@ Like_mdl_met_test
 final_xgb_test_results %>%
   collect_predictions() %>%
   #custom threshold
-  mutate(.pred_class = ifelse(.pred_Yes > rf_best_thresh, "Yes", "No")) %>%
-  conf_mat(Sued, .pred_class) %>%
-  autoplot(cm, type = "heatmap") +
-  labs(title = "Random Forest Confusion Matrix on Test with Optimal F2 Measure as Threshold") +
-  scale_fill_stepsn( colors = c("white", "#00d0d8"), breaks = c(15, 40, 100)) +
-  theme(panel.border = element_rect(colour = "#00d0d8", fill=NA, size= 1))
-
-#plotting the CM of the test set pred of the final model
-# final_xgb_test_results %>%
-#   collect_predictions() %>%
-#   #custom threshold
-#   mutate(.pred_class = ifelse(.pred_Yes > rf_best_thresh_BA, "Yes", "No")) %>%
-#   conf_mat(Sued, .pred_class) %>%
-#   autoplot(cm, type = "heatmap") +
-#   labs(title = "Random Forest Confusion Matrix on Test with CV BAcc as Threshold") +
-#   scale_fill_stepsn( colors = c("white", "#00d0d8"), breaks = c(15, 40, 100)) +
-#   theme(panel.border = element_rect(colour = "#00d0d8", fill=NA, size= 1))
-
-#plotting the CM of the test set pred of the final model
-final_xgb_test_results %>%
-  collect_predictions() %>%
-  #custom threshold
   mutate(.pred_class = ifelse(.pred_Yes > xgb_best_thresh_BA, "Yes", "No")) %>%
   conf_mat(Sued, .pred_class) %>%
   autoplot(cm, type = "heatmap") +
@@ -1506,57 +1498,24 @@ final_xgb_test_results %>%
   scale_fill_stepsn( colors = c("white", "#C77CFF"), breaks = c(15, 40, 100)) +
   theme(panel.border = element_rect(colour = "#C77CFF", fill=NA, size= 1))
 
-#plotting the CM of the test set pred of the final model
-final_lr_test_results %>%
-  collect_predictions() %>%
-  #custom threshold
-  mutate(.pred_class = ifelse(.pred_Yes > lr_best_thresh, "Yes", "No")) %>%
-  conf_mat(Sued, .pred_class) %>%
-  autoplot(cm, type = "heatmap") +
-  labs(title = "LR Confusion Matrix on Test with Optimal F2 Measure as Threshold") +
-  scale_fill_stepsn( colors = c("white", "#7CAE00"), breaks = c(15, 40, 100)) +
-  theme(panel.border = element_rect(colour = "#7CAE00", fill=NA, size= 1))
-
-#predicting Mohawk Industries likelihood
-#actually a pseudo probability, fix later
-final_rf_model <- fit(final_rf, Data_train)
-predict(final_rf_model, Mohawk_Obs, type = "prob") %>% mutate(model = "RF")
-
-#feature importance
-final_rf_model %>% 
-  extract_fit_parsnip() %>%
-  vip(num_features = 10)
-
-#final_lr_model <- fit(final_lr, Data_train)
-
+#fitting the final model and making an uncalibrated prediction
 final_xgb_model <- fit(final_xgb, Data_train)
 predict(final_xgb_model, Mohawk_Obs, type = "prob") %>% mutate(model = "XGBoost")
 
-#likelihood_pred <- predict(final_xgb_model, Mohawk_Obs, type = "prob") %>% mutate(model = "XGBoost")
-#beta_predict(likelihood_pred$.pred_Yes, beta_cal) 
-
+#looking at feature importance
 final_xgb_model %>% 
   extract_fit_parsnip() %>%
   vip(num_features = 6)
 ```
 
-```{r RF Calibration Assessment and Adjustment}
+#### Calibrating the best model using k-folds cross validation and assessing the calibrated model's performance on the test set.
+
+```{r Final Model Calibration Assessment and Adjustment}
 #Okay it looks like xgb is the best model
 #but since we are looking at probabilities (and not labels or rankings)
 #we need to assess model calibration, adjust model calibration if necessary
 
-#creating data for calibration using monte carlo cross validation
-#see the paper: Getting More Out of Small Data Sets
-#Improving the Calibration Performance of Isotonic Regression by Generating More Data
-#https://www.scitepress.org/papers/2018/65760/65760.pdf
-# lr_mccv <- final_lr %>% 
-#   fit_resamples(resamples = Data_cal_folds, control = control_resamples(save_pred = TRUE, save_workflow = TRUE))
-# lr_mccv <- lr_mccv %>% collect_predictions()
-
-# rf_cv <- final_rf %>% 
-#   fit_resamples(resamples = Data_folds, control = control_resamples(save_pred = TRUE, save_workflow = TRUE))
-# rf_cv <- xgb_cv %>% collect_predictions()
-
+#assessing calibration using k-folds cross validation
 xgb_cv <- final_xgb %>%
   fit_resamples(resamples = Data_cal_folds, control = control_resamples(save_pred = TRUE, save_workflow = TRUE))
 xgb_cv <- xgb_cv %>% collect_predictions()
@@ -1647,6 +1606,64 @@ mn_log_loss(data = xgb_test_res, estimate = beta_Yes, truth = Sued) %>% mutate(c
 summary(verify(obs = xgb_test_res$Sued_1hot, pred = xgb_test_res$.pred_Yes))
 summary(verify(obs = xgb_test_res$Sued_1hot, pred = xgb_test_res$platt_Yes))
 summary(verify(obs = xgb_test_res$Sued_1hot, pred = xgb_test_res$beta_Yes))
+```
+
+#### Graphing calibration curves on the calibration set (cross validation) and test set.
+
+```{r Calibration Curve Function}
+#modifying code from remotes::install_github('ML4LHS/runway')
+#to make calibration plots
+
+#function that plots calibration curves
+#pred_data is the data set that contains predictions
+#pred_var is the variable in pred_data that contains probability predictions
+#turth_var is the variable in pred_data that contains the one hot encoded true class
+plot_cal_curve <- function(pred_data, pred_var, truth_var){
+  
+  #creating the bins and standard errors
+  cal_plot <- dplyr::mutate(pred_data, bin = dplyr::ntile(pred_var, 10)) %>% 
+  dplyr::group_by(bin) %>% 
+  dplyr::mutate(n = dplyr::n(), 
+                bin_pred = mean(pred_var, na.rm = TRUE), 
+                bin_prob = mean(truth_var, na.rm = TRUE), 
+                se = sqrt((bin_prob * (1 - bin_prob))/n), 
+                ul = bin_prob + 1.96 * se, 
+                ll = bin_prob - 1.96 * se) %>% 
+  dplyr::mutate_at(dplyr::vars(ul, ll), . %>% scales::oob_squish(range = c(0, 1))) %>% 
+  dplyr::ungroup()
+
+  #plotting the calibration curve
+  cal_plot %>% 
+  ggplot2::ggplot() + 
+  ggplot2::scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = .1)) + 
+  ggplot2::scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.1)) + 
+  ggplot2::geom_abline(linetype = "dashed") + 
+  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
+                      size = 2, 
+                      color = "black") + 
+  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
+                         size = 0.5, 
+                         color = "black", width = 0.02) + 
+  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
+                      size = 2, 
+                      color = "black") + 
+  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
+                         size = 0.5, 
+                         color = "black", 
+                         width = 0.02) + 
+  ggplot2::geom_smooth(ggplot2::aes(x = pred_var, y = truth_var, color = "#00BFC4"), 
+                       se = TRUE, 
+                       method = "loess") + 
+  labs(title = "XGBoost Calibration curve", 
+       x = "Predicted probability",
+       y = "Empirical probability") +
+  ggplot2::theme_minimal() + 
+  ggplot2::theme(aspect.ratio = 1, legend.position="none") +
+  #modify if you want to zoom in on part of the plot
+  coord_cartesian(xlim=c(0,1), ylim=c(0,1),)
+}
+
+plot_cal_curve(xgb_cv, .pred_Yes, Sued_1hot)
 ```
 
 ```{r Likelihood Calibration Curves Validation Set}
@@ -1912,28 +1929,42 @@ rf_cal_plot <- dplyr::mutate(xgb_test_res, bin = dplyr::ntile(beta_Yes, 10)) %>%
   coord_cartesian(xlim=c(0,1), ylim=c(0,1),)
 ```
 
+#### Using the calibrated best model to make the final prediction of SCA litigation likelihood for Mohawk Industries Inc.
 
-### Quantitative Analysis
->Predicting the cost of shareholder litigation
+```{r Best Likelihood Prediction}
+#final prediction with the best performing beta calibration ensemble
+likelihood_pred <- predict(final_xgb_model, Mohawk_Obs, type = "prob") %>% mutate(model = "XGBoost")
+beta_predict(likelihood_pred$.pred_Yes, beta_cal) 
+```
+
+## Severity Modeling
+
+#### Predicting the cost of SCA litigation for Mohawk Industries Inc.
+
+The creation of a high quality severity model necessitated optimizing model hyperparameters and comparing multiple algorithms.In order to optimize hyperparameters and compare algorithms a nested cross validation procedure was implemented since the data set was relatively small (n\<100), thus utilizing the data budget optimally was essential. Nested cross-validation entails "nesting" a cross-validation loop, referred to as the inner loop, for hyperparameter optimization within another cross-validation loop, referred to as the outer loop, for estimating generalization accuracy. This procedure for model comparison optimally navigates the training and test data split trade-off that is especially detrimental to small data sets and circumvents the optimization bias introduced by using the same k-fold cross validation procedure to both tune model hyperparameters and evaluate models. In this case the Raschka nested cross-validation method was used, which entails having 5 outer folds and 2 inner folds. The 5 models created at the end of the outer loop of cross validation then had their performance averaged to provide the unbiased algorithm performance estimate and the standard deviation of this estimate is calculated as well to provide a measure of variation. Afterward the mean R2 was also calculated for performance evaluation.
+
+#### Final data set creation with missing value imputation using MissForest.
+MissForest imputation was selected as the missing value imputation method because it is a robust imputation method that is nonparametric, can handle numeric and categorical variables, is computationally inexpensive, can handle high dimensionality, and provides error estimates using OOB error.
 
 ```{r Final Dataset Cleaning and Imputation for Severity}
 #Joining together most of the final data set
-#Dat_sv <- SCA_filings2 %>% filter(SettlementAmount > 0) %>% add_row(gvkey = "025119")
-#Dat_sv <- Dat_sv %>% left_join(fundamentals2, by = c("gvkey"))
 Dat_sv <- securities2 %>% left_join(stocks2, by = c("gvkey")) #%>% add_row(gvkey = "025119")
 Dat_sv <- Dat_sv %>% left_join(fundamentals2, by = c("gvkey"))
 Dat_sv <- Dat_sv %>% left_join(ratings2, by = c("gvkey"))
 Dat_sv <- Dat_sv %>% left_join(ggroup_df %>% distinct(.keep_all = TRUE), by = c("gvkey"))
 
-#Adding the final variables of interest to the dataframe, settlement amount
+#Adding the final variables of interest to the data frame, settlement amount
 Dat_sv <- Dat_sv %>% left_join(SCA_filings2, by = c("gvkey"))
 
 #removing Mohawk Industries Observation temporarily
 Mohawk_Obs_sv <- Dat_sv %>% filter(gvkey == "025119")
 Mohawk_Obs_sv
 
+#filtering the data to only observations with a settlement amount
+#since this will be our response variable
 Dat_sv <-  Dat_sv %>% filter(SettlementAmount > 0)
-  
+
+#rebinding the Mohawk Industries Observation so it gets missing values imputed
 Dat_sv <- rbind(Dat_sv, Mohawk_Obs_sv)
 
 Dat_sv <- Dat_sv %>%
@@ -1941,8 +1972,6 @@ Dat_sv <- Dat_sv %>%
   dplyr::select(-c(FilingYear, Sued, Ticker)) %>%
   #also only using companies that we have some info about (have a gvkey identified)
   filter(!is.na(gvkey))
-
-Dat_sv
 
 #checking NAs, quite a lot
 NAcheck(Dat_sv) %>% arrange(percent_of_missing_values)
@@ -1969,13 +1998,10 @@ Dat_sv_imputed$OOBerror
 Dat_sv_best_impute <- Dat_sv_imputed$ximp
 NAcheck(Dat_sv_best_impute)
 
-#reattaching settlement amount data after imputation
+#reattaching settlement amount data after missing value imputation
 Dat_sv <- cbind(Dat_sv_Settle, Dat_sv_best_impute)
 
-#making sure everything looks good
-head(Dat_sv)
-
-#saving mohawk industries observation for future prediction
+#saving Mohawk industries observation for future prediction
 Mohawk_Obs_sv <- Dat_sv %>% filter(gvkey == "025119")
 Mohawk_Obs_sv
 
@@ -1983,21 +2009,20 @@ Mohawk_Obs_sv
 #the training or testing sets
 Dat_sv <- Dat_sv %>% filter(gvkey != "025119")
 
-#cap outliers
+#capping outliers
 Dat_sv$SettlementAmount <- capOutlier(Dat_sv$SettlementAmount)
 
+#assessing the data
 skimr::skim(Dat_sv)
 ```
 
-```{r Boruta Feature Selection for Severity}
-#to select features from the >200 predictor model
-#change this from doing it on the full data set to just the training set
-#since this sequence of feature selection may cause an info leak
+#### The Boruta Algorithm was used for feature selection to reduce dimensionality of the data for the small severity data set.
 
+```{r Boruta Feature Selection for Severity}
+#for reproducibility
 set.seed(111)
 
-#for the universal part of the feature selection process for likelihood models 
-#I use Boruta, a wrapper method that selects all relevant variables (not minimal)
+#I use Boruta, a wrapper method that selects all relevant variables for feature selection
 boruta_sv <- Boruta(SettlementAmount ~ ., data = Dat_sv[,-2], doTrace = 2, maxRuns = 500)
 print(boruta_sv)
 
@@ -2006,11 +2031,11 @@ print(boruta_sv)
 plot(boruta_sv, las = 2, cex.axis = 0.7)
 attStats(boruta_sv) %>% arrange(desc(meanImp))
 
-#tentative rough fix fixes features that aren't 
+#tentative rough fix fixes features that are still tenative after the maxRuns is reached
+#for the Boruta feature selection algorithm
 final_boruta_sv <- TentativeRoughFix(boruta_sv)
 features_selected_sv <- getSelectedAttributes(final_boruta_sv)
 features_selected_sv <- c(features_selected_sv, "SettlementAmount", "gvkey")
-#features_selected_sv <- features_selected_sv[! features_selected_sv %in% c('dd3_avg')]
 
 #plotting the top 10% of variables by mean importance in regards to being sued
 attStats(boruta_sv) %>%
@@ -2023,11 +2048,12 @@ attStats(boruta_sv) %>%
   labs(title = "Top 5% Most Important Variable for SettlementAmount as Response", y = NULL)
 ```
 
+#### A tidymodels recipe was used to remove all zero variance variables, normalize the data, and one hot encode all categorical variables.
+
 ```{r Severity Recipes Feature Engineering}
 set.seed(3)
 
 #Generic Recipe for Feature Engineering
-#Dat_sv_rec <- recipe(SettlementAmount ~ ., data = Dat_sv[,features_selected]) %>%
 Dat_sv_rec <- recipe(SettlementAmount ~ ., data = Dat_sv[,features_selected_sv]) %>%
   update_role(gvkey, new_role = "ID") %>%
   update_role(SettlementAmount, new_role = "outcome") %>%
@@ -2042,11 +2068,14 @@ Dat_sv_rec <- recipe(SettlementAmount ~ ., data = Dat_sv[,features_selected_sv])
 #test2 <- 
 #  Dat_sv_rec %>% # use the recipe object
 #  prep() %>% # perform the recipe on training data
-#  juice() # extract only the preprocessed dataframe
+#  juice() #returns the data with all recipe steps applied
 
+#creating a workflow with the data preprocessing recipe
+#will be used when tuning each model
 Dat_sv_wf <- workflow() %>%
   add_recipe(Dat_sv_rec)
 
+#histogram of settlement amounts
 ggplot(Dat_sv, aes(SettlementAmount)) +
   geom_histogram(color = "#000000", fill = "#85C285", bins = 20) +
   #geom_text(data = annotations, aes(x = x, y = y, label = paste(label, x)), size = 5, fontface = "bold") +
@@ -2055,17 +2084,21 @@ ggplot(Dat_sv, aes(SettlementAmount)) +
   theme_classic()
 ```
 
+#### The metrics of algorithm evaluation were RMSE and R-squared.
+
 ```{r Severity Train Test Split}
-#number of outer folds
+#number of outer folds for the nested cross validation procedure
 outer_folds_k <- 5
 
 #creating the outer folds
 set.seed(4)
 outer_folds_i <- sample(rep(1:outer_folds_k, length.out = nrow(Dat_sv)))
 
-#setting metrics
+#setting the evaluation metrics
 metrics_sv <- metric_set(yardstick::rmse, yardstick::rsq)
 ```
+
+#### Performing nested cross validation for algorithm selection.
 
 ```{r Nested Cross Validation Severity RandomForest}
 #random forest tuneable regression model specifications
@@ -2132,17 +2165,15 @@ for (k in 1:outer_folds_k) {
   #to estimate performance of the algorithm
   best_inner_error <- best_inner_error %>% add_row(best_sv_rf_metrics)
 }
-#display the tibble containing 
+
+#saving the random forest performance data 
 rf_best_inner_error <- best_inner_error
 rf_outer_error_mean <- rf_best_inner_error %>% filter(.metric == "rmse") %>% dplyr::select(.estimate) %>% pull() %>% mean()
 rf_outer_error_std <- rf_best_inner_error %>% filter(.metric == "rmse") %>% dplyr::select(.estimate) %>% pull() %>% std_mean()
 rf_outer_error_r2_mean <- rf_best_inner_error %>% filter(.metric == "rsq") %>% dplyr::select(.estimate) %>% pull() %>% na_rm_mean()
 
+#outputting the mean R-squared for a rough performance estimate
 rf_outer_error_r2_mean
-
-#rf_sv_tune_results %>% 
-#  show_best(metric = "rmse")
-#autoplot(rf_sv_tune_results)
 ```
 
 ```{r Nested Cross Validation Severity Lasso}
@@ -2210,12 +2241,14 @@ for (k in 1:outer_folds_k) {
   #to estimate performance of the algorithm
   best_inner_error <- best_inner_error %>% add_row(best_sv_lassor_metrics)
 }
-#display the tibble containing 
+
+#saving the lasso regression performance data 
 lassor_best_inner_error <- best_inner_error
 lassor_outer_error_mean <- lassor_best_inner_error %>% filter(.metric == "rmse") %>% dplyr::select(.estimate) %>% pull() %>% mean()
 lassor_outer_error_std <- lassor_best_inner_error %>% filter(.metric == "rmse") %>% dplyr::select(.estimate) %>% pull() %>% std_mean()
 lassor_outer_error_r2_mean <- lassor_best_inner_error %>% filter(.metric == "rsq") %>% dplyr::select(.estimate) %>% pull() %>% na_rm_mean()
 
+#outputting the mean R-squared for a rough performance estimate
 lassor_outer_error_r2_mean
 ```
 
@@ -2284,14 +2317,17 @@ for (k in 1:outer_folds_k) {
   #to estimate performance of the algorithm
   best_inner_error <- best_inner_error %>% add_row(best_sv_ridger_metrics)
 }
-#display the tibble containing 
+
+#saving the ridge regression performance data 
 ridger_best_inner_error <- best_inner_error
 ridger_outer_error_mean <- ridger_best_inner_error %>% filter(.metric == "rmse") %>% dplyr::select(.estimate) %>% pull() %>% mean()
 ridger_outer_error_std <- ridger_best_inner_error %>% filter(.metric == "rmse") %>% dplyr::select(.estimate) %>% pull() %>% std_mean()
 ridger_outer_error_r2_mean <- ridger_best_inner_error %>% filter(.metric == "rsq") %>% dplyr::select(.estimate) %>% pull() %>% mean()
 
+#outputting the mean R-squared for a rough performance estimate
 ridger_outer_error_r2_mean
 ```
+
 ```{r Nested Cross Validation Severity XGBoost}
 #xgb tuneable model specifications
 xgb_sv_spec <- boost_tree(
@@ -2373,16 +2409,23 @@ for (k in 1:outer_folds_k) {
   best_inner_error <- best_inner_error %>% add_row(best_sv_XGBoost_metrics)
   print(paste("Run complete", k))
 }
-#display the tibble containing 
+
+#saving the XGBoost performance data 
 XGBoost_best_inner_error <- best_inner_error
 XGBoost_outer_error_mean <- XGBoost_best_inner_error %>% filter(.metric == "rmse") %>% dplyr::select(.estimate) %>% pull() %>% mean()
 XGBoost_outer_error_std <- XGBoost_best_inner_error %>% filter(.metric == "rmse") %>% dplyr::select(.estimate) %>% pull() %>% std_mean()
 XGBoost_outer_error_r2_mean <- XGBoost_best_inner_error %>% filter(.metric == "rsq") %>% dplyr::select(.estimate) %>% pull() %>% na_rm_mean()
 
+#outputting the mean R-squared for a rough performance estimate
 XGBoost_outer_error_r2_mean
 ```
 
+#### Comparing the mean outer fold performance of each algorithm (model building procedure).
+
 ```{r Severity Nested CV Comparison}
+
+#creating a data frame from all those performance data sets saved at the end of each
+#nested cross validation procedure for each algorithm
 Sv_mdl_outer_errors <- bind_rows(tibble(rmse = rf_outer_error_mean, std = rf_outer_error_std, r2 = rf_outer_error_r2_mean, 
                                         model = "Random Forest"),
                                tibble(rmse = lassor_outer_error_mean, std = lassor_outer_error_std, r2 = lassor_outer_error_r2_mean,
@@ -2392,8 +2435,7 @@ Sv_mdl_outer_errors <- bind_rows(tibble(rmse = rf_outer_error_mean, std = rf_out
                                tibble(rmse = XGBoost_outer_error_mean, std = XGBoost_outer_error_std, r2 = XGBoost_outer_error_r2_mean,
                                       model = "XGBoost"))
 
-Sv_mdl_outer_errors %>% relocate(model) %>% arrange(rmse)
-
+#making bar plots of the average outer fold RMSE of each algorithm
 Sv_mdl_outer_errors %>% 
   arrange(rmse, decreasing = TRUE) %>%
   mutate(model = fct_reorder(model, rmse, .desc = TRUE)) %>%
@@ -2409,6 +2451,7 @@ Sv_mdl_outer_errors %>%
   geom_text(size = 4, aes(label = round(rmse, 3), y = rmse), vjust = 2.5) +
   labs(title = "Best Severity Model by Mean Outer Test Fold RMSE", x = "Model", y = "RMSE")
 
+#making bar plots of the average outer fold R-squared of each algorithm
 Sv_mdl_outer_errors %>% 
   arrange(r2, decreasing = TRUE) %>%
   mutate(model = fct_reorder(model, r2, .desc = FALSE)) %>%
@@ -2423,59 +2466,9 @@ Sv_mdl_outer_errors %>%
   labs(title = "Average Outer Test Fold R-Squared", x = "Model", y = "R-Squared")
 ```
 
-```{r Best Severity Prediction XGB}
-#now according to Raschka we refit the best algorithm on the whole data set
-#with hyper parameters optimized on cross validation using the whole data set
-#and predict
+#### Finally, constructing a prediction interval of the cost of potential SCA litigation for Mohawk Industries with the best algorithm.
 
-#creating folds
-Dat_sv_folds <- vfold_cv(train, v = 5)
-
-#final tuning using cross validation
-final_XGBoost_sv_tune_results <- Dat_sv_wf %>%
-    add_model(xgb_sv_spec) %>%
-    tune_grid(Dat_sv_folds,
-            grid = xgb_sv_grid,
-            control = control_grid(save_pred = TRUE),
-            metrics = metrics_sv)
-
-#finalizing work flow
-final_best_XGBoost_sv_wf <- finalize_workflow(XGBoost_sv_wf, final_XGBoost_sv_tune_results %>% select_best("rmse"))
-
-#fitting the final model with optimized hyper-parameters
-final_fit_best_XGBoost_sv_wf <- fit(final_best_XGBoost_sv_wf, data = Dat_sv[,features_selected_sv])
-
-#make a nice feature importance plot
-final_fit_best_XGBoost_sv_wf %>%
-  pull_workflow_fit() %>%
-  vip(geom = "point")
-
-#final prediction
-predict(final_fit_best_XGBoost_sv_wf, Mohawk_Obs_sv[,features_selected_sv])
-
-#oh god I need a confidence interval oops
-#we'll use the naive magpie method
-
-pred_quantiles <- final_XGBoost_sv_tune_results %>% collect_predictions() %>% mutate(residual = abs(SettlementAmount-.pred)) %>% dplyr::select(residual) %>% pull() %>% quantile(probs = c(.9, .95))
-
-
-
-bind_rows(Lower = predict(final_fit_best_XGBoost_sv_wf, Mohawk_Obs_sv[,features_selected_sv]) - pred_quantiles[2], Upper = predict(final_fit_best_XGBoost_sv_wf, Mohawk_Obs_sv[,features_selected_sv]) + pred_quantiles[2])
-
-final_XGBoost_sv_tune_results %>% collect_predictions() %>% mutate(residual = abs(SettlementAmount-.pred)) %>%
-  ggplot(aes(residual)) +
-  geom_histogram(color = "#000000", fill = "#85C285", bins = 20) +
-  #geom_text(data = annotations, aes(x = x, y = y, label = paste(label, x)), size = 5, fontface = "bold") +
-  scale_x_continuous(labels=scales::dollar_format()) +
-  geom_vline(xintercept= pred_quantiles[2], 
-             linetype="dashed", 
-             color = "red",
-             size = .5) +
-  labs(title = "Absolute Calibration Errors for the Final XGBoost Model", caption = "Red line indicates .95 quantile") +
-  theme_classic()
-```
-
-```{r Best Severity Prediction RF}
+```{r Best Severity Prediction}
 #now according to Raschka we refit the best algorithm on the whole data set
 #with hyper parameters optimized on cross validation using the whole data set
 #and predict 
@@ -2502,18 +2495,18 @@ final_fit_best_rf_sv_wf %>%
 extract_fit_parsnip() %>% 
   vip(num_features = 10)
 
-#final prediction
+#final point prediction
 stats::predict(final_fit_best_rf_sv_wf, Mohawk_Obs_sv[,features_selected_sv])
 
-#oh god I need a confidence interval oops
-#we'll use the naive mapie method
-
+#To construct a confidence interval we'll use the naive MAPIE method
 pred_quantiles <- final_rf_sv_tune_results %>% collect_predictions() %>% mutate(residual = abs(SettlementAmount-.pred)) %>% dplyr::select(residual) %>% pull() %>% quantile(probs = c(.9, .95))
 
-pred_quantiles
-
+#using the 95th quantile of absolute error to construct a 95% prediction interval
+#of the severity estimate of SCA litigation for Mohawk Industries Inc.
 bind_rows(Lower = predict(final_fit_best_rf_sv_wf, Mohawk_Obs_sv[,features_selected_sv]) - pred_quantiles[2], Upper = predict(final_fit_best_rf_sv_wf, Mohawk_Obs_sv[,features_selected_sv]) + pred_quantiles[2])
 
+#plotting the absolute errors
+#with a red line to indicate the .95 quantile
 final_rf_sv_tune_results %>% collect_predictions() %>% mutate(residual = abs(SettlementAmount-.pred)) %>%
   ggplot(aes(residual)) +
   geom_histogram(color = "#000000", fill = "#85C285", bins = 20) +
@@ -2577,5 +2570,3 @@ final_rf_sv_tune_results %>% collect_predictions() %>% mutate(residual = abs(Set
 # Data <- imputed
 # NAcheck(Data)
 ```
-
-
