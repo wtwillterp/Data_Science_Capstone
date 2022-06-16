@@ -3,6 +3,11 @@ title: "Data_Science_Capstone"
 author: "William Terpstra"
 date: '2022-06-15'
 output: html_document
+knit: (function(input_file, encoding) {
+    out_dir <- 'docs';
+    rmarkdown::render(input_file,
+      encoding=encoding,
+      output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
 ---
 
 ```{r setup, include=FALSE}
@@ -684,7 +689,7 @@ set.seed(111)
 
 #for the universal part of the feature selection process for likelihood models 
 #I use Boruta, a wrapper method that selects all relevant variables (not minimal)
-boruta <- Boruta(Sued ~ ., data = Data[,-c(1,2)], doTrace = 2, maxRuns = 100)
+boruta <- Boruta(Sued ~ ., data = Data[,-c(1,2)], doTrace = 2, maxRuns = 60)
 print(boruta)
 
 #the default plot of boruta, a bit too dense to be that informative besides
