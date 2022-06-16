@@ -54,7 +54,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 The purpose of this project is to create data derived estimates of the likelihood and severity of SCA litigation against Mohawk Industries Inc.
 
-```{r Load Data}
+```{r Load Data, warning=FALSE}
 #Setting working directory
 setwd("C:/Users/Will/Documents/Capstone")
 #Loading all the data
@@ -183,12 +183,12 @@ king_log <- function(x) sign(x)*log(abs(x)+1)
 
 ```{r Assessing Shared Variables}
 #looking to see if any of the data sets share columns
-intersect(names(fundamentals), names(ratings))
-intersect(names(fundamentals), names(securities))
-intersect(names(fundamentals), names(stocks))
-intersect(names(ratings), names(securities))
-intersect(names(ratings), names(stocks))
-intersect(names(securities), names(stocks))
+# intersect(names(fundamentals), names(ratings))
+# intersect(names(fundamentals), names(securities))
+# intersect(names(fundamentals), names(stocks))
+# intersect(names(ratings), names(securities))
+# intersect(names(ratings), names(stocks))
+# intersect(names(securities), names(stocks))
 
 #fixing weird ID column name and data type
 names(stocks)[names(stocks) == 'ï..gvkey'] <- 'gvkey'
@@ -290,11 +290,11 @@ SCA_filings2 <- SCA_filings2 %>% mutate(Sued = "Yes")
 #in this data set, consequently I will proceed with the inclusion of 
 #splticrm for this project, splticrm is the long term issuer credit rating, 
 #and the credit rating with the lowest amount of NAs
-NAcheck(ratings)
+#NAcheck(ratings)
 
 #assessing date range
-ratings$datadate <- strptime(ratings$datadate, format = "%m/%d/%Y")
-summary(ratings$datadate)
+# ratings$datadate <- strptime(ratings$datadate, format = "%m/%d/%Y")
+# summary(ratings$datadate)
 
 #filtering out all the unnecessary variables and only including companies in the same
 #GIC sector as Mohawk Industries Inc. (Code 252010, Household Durables)
@@ -310,7 +310,7 @@ ratings2 <-  ratings2 %>% distinct(.keep_all = TRUE)
 NAcheck(ratings2)
 
 #looking at the distribution of NAs per company
-ratings2 %>% group_by(gvkey) %>% summarise(na = sum(is.na(splticrm))) %>% ggplot(aes(x=na)) + geom_histogram()
+#ratings2 %>% group_by(gvkey) %>% summarise(na = sum(is.na(splticrm))) %>% ggplot(aes(x=na)) + geom_histogram()
 
 #mutating credit ratings to a numeric value, since it is a ordinal categorical variable
 ratings2 <- ratings2 %>% 
@@ -339,7 +339,6 @@ ratings2 <- ratings2 %>%
 
 #making sure R recognizes the column data is now num not chr
 ratings2 <- ratings2 %>% mutate(splticrm = as.numeric(splticrm))
-summary(ratings2$splticrm)
 
 #Since the data occurs over a time span and time series data is tricky
 #for the models I know how to use (since it is generally auto correlated)
@@ -373,7 +372,7 @@ securities2 <- securities %>%
 securities2$curcdm <- as.factor(securities2$curcdm)
 
 #assessing data completion
-NAcheck(securities2) %>% arrange(percent_of_missing_values)
+#NAcheck(securities2) %>% arrange(percent_of_missing_values)
 
 #assessing data date range
 #seems like the standard 2010-2014 range
@@ -384,8 +383,8 @@ NAcheck(securities2) %>% arrange(percent_of_missing_values)
 securities2 <-  securities2 %>% distinct(.keep_all = TRUE)
 
 #checking how NAs are distributed between companies via a histogram
-securities2 %>% group_by(gvkey) %>% summarise(na = sum(is.na(dvrate))) %>% ggplot(aes(x=na)) + geom_histogram()
-securities2 %>% ungroup()
+# securities2 %>% group_by(gvkey) %>% summarise(na = sum(is.na(dvrate))) %>% ggplot(aes(x=na)) + geom_histogram()
+# securities2 %>% ungroup()
 
 #Now to address the fact this is data over a date range, I'm going to have to
 #summarize the data, essentially use functions to condense it into a single
@@ -398,11 +397,10 @@ securities2 <- securities2 %>% group_by(gvkey) %>%
    summarise_if(is.numeric, list(avg = na_rm_mean, sd = na_rm_sd))
 
 #checking variables with a suspicious amount of 0s
-lapply(securities2, function(x){ length(which(x==0))/length(x)})
+#lapply(securities2, function(x){ length(which(x==0))/length(x)})
 
 #removing variables with too many missing values
- securities2 <- NAcull(securities2)
- NAcheck(securities2)
+securities2 <- NAcull(securities2)
 
 #looking at univariate distributions
 ggplot(gather(securities2 %>% dplyr::select(where(is.numeric))), aes(value)) + 
@@ -442,7 +440,7 @@ NAcheck(securities2) %>% arrange(percent_of_missing_values)
 #skimr::skim(securities2)
 ```
 
-```{r Stocks Cleaning}
+```{r Stocks Cleaning, warning=FALSE}
 #only care about gcis sector
 #stocks <- stocks %>% filter(gsector == 25 | gvkey %in% gvkeys_matched_tic$gvkey) #old code to filter by gsector
 
@@ -464,7 +462,7 @@ stocks2 <-  stocks2 %>% distinct(.keep_all = TRUE)
 
 #looking at the frequency of zeroes in the data set
 #to weed out any imputation errors/irregularities
-lapply(stocks2, function(x){ length(which(x==0))/length(x)})
+#lapply(stocks2, function(x){ length(which(x==0))/length(x)})
 
 #seems like a potentially suspicious amount of 0s are in cshtrd based on the
 #log distribution, but ultimately it seems plausible 
@@ -478,11 +476,11 @@ stocks_num <- stocks2 %>% group_by(gvkey) %>%
    summarise_if(is.numeric, list(avg = na_rm_mean, sd = na_rm_sd))
 
 #looking at missing values
-NAcheck(stocks_num) %>% arrange(percent_of_missing_values)
+#NAcheck(stocks_num) %>% arrange(percent_of_missing_values)
 
 #removing columns with excessive missing values after each observation corresponds to a company
- stocks_num <- stocks_num %>% ungroup() %>% NAcull(threshold = .4)
- NAcheck(stocks_num)
+stocks_num <- stocks_num %>% ungroup() %>% NAcull(threshold = .4)
+#NAcheck(stocks_num)
 
 #looking at univariate distributions
 ggplot(gather(stocks_num %>% dplyr::select(-gvkey)), aes(value)) + 
@@ -518,8 +516,8 @@ stocks_num <- stocks_num %>% mutate_all(function(x) ifelse(is.nan(x), NA, x))
 #of each factor variable
 stocks_fac <- stocks2 %>% 
   group_by(gvkey) %>%
-  summarise_if(is.factor, getmode)
-stocks_fac %>% ungroup()
+  summarise_if(is.factor, getmode) %>% 
+  ungroup()
 
 #combining the collapsed numeric and factor data sets
 stocks2 <- stocks_num %>% left_join(stocks_fac, by = c("gvkey"))
@@ -546,7 +544,7 @@ fundamentals2 <- fundamentals %>%
 fundamentals2 <-  fundamentals2 %>% distinct(.keep_all = TRUE)
 
 #I inner join a csv of the data dictionary
-fundamentals2 %>% NAcheck() %>% inner_join(datDict, by = c("names" = "Mnemonic")) %>% arrange(percent_of_missing_values)
+#fundamentals2 %>% NAcheck() %>% inner_join(datDict, by = c("names" = "Mnemonic")) %>% arrange(percent_of_missing_values)
 
 #now removing variables that aren't useful in the model like company name, address
 #and business description
@@ -565,7 +563,7 @@ fundamentals2[,factors] <- lapply(fundamentals2[,factors] , factor)
 fund_factors <- fundamentals2 %>% 
   group_by(gvkey) %>%
   summarise_if(is.factor, getmode)
-str(fund_factors)
+#str(fund_factors)
 
 #summarizing the numeric variables
 fund_num <- fundamentals2 %>%
@@ -597,6 +595,7 @@ fundamentals2[, idx] <- lapply(fundamentals2[, idx], capOutlier)
 The best model was selected using k-folds cross validation on the training set. It was then calibrated using k-folds cross validation and had its final performance assessed on a held out test set.
 
 #### Final data set creation with missing value imputation using MissForest.
+
 MissForest imputation was selected as the missing value imputation method because it is a robust imputation method that is nonparametric, can handle numeric and categorical variables, is computationally inexpensive, can handle high dimensionality, and provides error estimates using OOB error.
 
 ```{r Final Dataset Cleaning and Imputation for Likelihood}
@@ -609,7 +608,7 @@ Data <- Data %>% left_join(ratings2, by = c("gvkey"))
 Data <- Data %>% left_join(ggroup_df %>% distinct(.keep_all = TRUE), by = c("gvkey"))
 
 #Assessing missing values
-NAcheck(Data) %>% arrange(percent_of_missing_values)
+#NAcheck(Data) %>% arrange(percent_of_missing_values)
 
 #Adding the response variables
 Data <- Data %>% left_join(SCA_filings2, by = c("gvkey"))
@@ -627,7 +626,7 @@ Data$Sued <- factor(Data$Sued, levels =c("Yes", "No"))
 #making sure everything worked correctly
 summary(Data$Sued)
 #checking NAs, quite a lot
-NAcheck(Data) %>% arrange(percent_of_missing_values)
+#NAcheck(Data) %>% arrange(percent_of_missing_values)
 
 #removing NAs
 Data <- NAcull(Data)
@@ -659,7 +658,7 @@ Data_imputed$OOBerror
 
 #checking to make sure that the data is properly imputed
 Best_impute <- Data_imputed$ximp
-NAcheck(Best_impute)
+#NAcheck(Best_impute)
 
 #reattaching settlement amount data after imputation
 Data <- cbind(Data_Settle, Best_impute)
@@ -776,7 +775,7 @@ get_model <- function(x) {
 metrics <- metric_set(yardstick::accuracy, yardstick::mn_log_loss, yardstick::specificity, yardstick::precision, yardstick::recall, yardstick::roc_auc)
 ```
 
-#### Performing the flat stratified k-fold cross validation procedure for model selection. 
+#### Performing the flat stratified k-fold cross validation procedure for model selection.
 
 ```{r lr_model}
 #logistic regression model specifications
@@ -873,14 +872,6 @@ lr_best_thresh_dat %>%
              color = "red",
              size = .5) +
   labs(title = "Optimal Classifier Threshold for Linear Regression", y = "Value", x = "Threshold" )
-
-#the confusion matrix of the best logistic regression model
-lr_tune_results %>% 
-  collect_predictions() %>%
-  filter(.config == lr_best$.config) %>%
-  #custom threshold
-  mutate(.pred_class = ifelse(.pred_Yes > lr_best_thresh, "Yes", "No")) %>%
-  conf_mat(Sued, .pred_class)
 
 #the metrics of the best logistic regression model
 lr_tune_results %>% 
@@ -982,14 +973,6 @@ rf_best_thresh_dat %>%
              color = "red",
              size = .5) +
   labs(title = "Optimal Classifier Threshold for Random Forest", y = "Value", x = "Threshold" )
-
-#the confusion matrix of the best rf model on the train set
-rf_tune_results %>% 
-  collect_predictions() %>%
-  filter(.config == rf_best$.config) %>%
-  #custom threshold
-  mutate(.pred_class = ifelse(.pred_Yes > rf_best_thresh, "Yes", "No")) %>%
-  conf_mat(Sued, .pred_class)
   
 #the metrics of the best rf model on the train set
 rf_tune_results %>% 
@@ -1001,10 +984,10 @@ rf_wf <- Data_wf %>% add_model(rf_spec)
 final_rf <- finalize_workflow(rf_wf, rf_best)
 
 #performing the last fit
-final_xgb_test_results <- last_fit(final_rf, Data_split, metrics = metrics)
+final_rf_test_results <- last_fit(final_rf, Data_split, metrics = metrics)
 
 # collecting the final predictions
-collect_metrics(final_xgb_test_results)
+collect_metrics(final_rf_test_results)
 ```
 
 ```{r xgb_model}
@@ -1108,16 +1091,8 @@ xgb_best_thresh_dat %>%
              size = .5) +
   labs(title = "Optimal Classifier Threshold for XGBoost", y = "Value", x = "Threshold" )
 
-#the confusion matrix of the best xgb model on the train set
-xgb_tune_results %>% 
-  collect_predictions() %>%
-  filter(.config == xgb_best$.config) %>%
-  #custom threshold
-  mutate(.pred_class = ifelse(.pred_Yes > xgb_best_thresh, "Yes", "No")) %>%
-  conf_mat(Sued, .pred_class)
-
 #the metrics of the best xgb model on the train set
-  xgb_tune_results %>% 
+xgb_tune_results %>% 
   collect_metrics() %>%
   filter(.config == xgb_best$.config)
 
@@ -1515,7 +1490,7 @@ final_xgb_model %>%
 
 #### Calibrating the best model using k-folds cross validation and assessing the calibrated model's performance on the test set.
 
-```{r Final Model Calibration Assessment and Adjustment}
+```{r Final Model Calibration Adjustment}
 #Okay it looks like xgb is the best model
 #but since we are looking at probabilities (and not labels or rankings)
 #we need to assess model calibration, adjust model calibration if necessary
@@ -1582,15 +1557,14 @@ ll_cal_compare <- rbind(lldf1, lldf2, lldf3, lldf5)
 ll_cal_compare
 
 #tested Brier skill score since it is like r squared
-#but it is not the best for infrequent events
-#but is better for interpretability
-summary(verify(obs = xgb_cv$Sued_1hot, pred = xgb_cv$.pred_Yes))
-summary(verify(obs = xgb_cv$Sued_1hot, pred = xgb_cv$platt_Yes))
-summary(verify(obs = xgb_cv$Sued_1hot, pred = xgb_cv$iso_Yes))
-summary(verify(obs = xgb_cv$Sued_1hot, pred = xgb_cv$beta_Yes))
+#it has issues for infrequent events but is better for interpretability
+# summary(verify(obs = xgb_cv$Sued_1hot, pred = xgb_cv$.pred_Yes))
+# summary(verify(obs = xgb_cv$Sued_1hot, pred = xgb_cv$platt_Yes))
+# summary(verify(obs = xgb_cv$Sued_1hot, pred = xgb_cv$iso_Yes))
+# summary(verify(obs = xgb_cv$Sued_1hot, pred = xgb_cv$beta_Yes))
+```
 
-############################ TEST ##############################################
-    
+```{r Final Model Calibration Assessment on Test}
 #looking at the calibration of the model on the held out set
 #as the final depiction of model performance
 xgb_test_res <- final_xgb_test_results %>% collect_predictions()
@@ -1615,22 +1589,23 @@ summary(verify(obs = xgb_test_res$Sued_1hot, pred = xgb_test_res$beta_Yes))
 
 #### Graphing calibration curves on the calibration set (cross validation) and test set.
 
-```{r Calibration Curve Function}
+```{r Calibration Curves}
 #modifying code from remotes::install_github('ML4LHS/runway')
 #to make calibration plots
 
 #function that plots calibration curves
 #pred_data is the data set that contains predictions
 #pred_var is the variable in pred_data that contains probability predictions
-#turth_var is the variable in pred_data that contains the one hot encoded true class
-plot_cal_curve <- function(pred_data, pred_var, truth_var){
-  
+#truth_var is the variable in pred_data that contains the one hot encoded true class
+#plot_title is the title of the plot
+plot_cal_curve <- function(pred_data, pred_var, truth_var, plot_title){
+
   #creating the bins and standard errors
-  cal_plot <- dplyr::mutate(pred_data, bin = dplyr::ntile(pred_var, 10)) %>% 
+  cal_plot <- dplyr::mutate(pred_data, bin = dplyr::ntile(!!rlang::parse_expr(pred_var), 10)) %>% 
   dplyr::group_by(bin) %>% 
   dplyr::mutate(n = dplyr::n(), 
-                bin_pred = mean(pred_var, na.rm = TRUE), 
-                bin_prob = mean(truth_var, na.rm = TRUE), 
+                bin_pred = mean(!!rlang::parse_expr(pred_var), na.rm = TRUE), 
+                bin_prob = mean(as.numeric(as.character(!!rlang::parse_expr(truth_var)), na.rm = TRUE)), 
                 se = sqrt((bin_prob * (1 - bin_prob))/n), 
                 ul = bin_prob + 1.96 * se, 
                 ll = bin_prob - 1.96 * se) %>% 
@@ -1656,10 +1631,10 @@ plot_cal_curve <- function(pred_data, pred_var, truth_var){
                          size = 0.5, 
                          color = "black", 
                          width = 0.02) + 
-  ggplot2::geom_smooth(ggplot2::aes(x = pred_var, y = truth_var, color = "#00BFC4"), 
+  ggplot2::geom_smooth(ggplot2::aes(x = !!rlang::parse_expr(pred_var), y = as.numeric(as.character(!!rlang::parse_expr(truth_var)), na.rm = TRUE), color = "#00BFC4"), 
                        se = TRUE, 
                        method = "loess") + 
-  labs(title = "XGBoost Calibration curve", 
+  labs(title = plot_title, 
        x = "Predicted probability",
        y = "Empirical probability") +
   ggplot2::theme_minimal() + 
@@ -1668,270 +1643,14 @@ plot_cal_curve <- function(pred_data, pred_var, truth_var){
   coord_cartesian(xlim=c(0,1), ylim=c(0,1),)
 }
 
-plot_cal_curve(xgb_cv, .pred_Yes, Sued_1hot)
-```
+#calibration curves via cross validation
+plot_cal_curve(xgb_cv, ".pred_Yes", "Sued_1hot", "XGBoost Calibration curve (Uncalibrated)")
+plot_cal_curve(xgb_cv, "platt_Yes", "Sued_1hot", "XGBoost Calibration curve (Platt)")
+plot_cal_curve(xgb_cv, "iso_Yes", "Sued_1hot", "XGBoost Calibration curve (Isotonic)")
+plot_cal_curve(xgb_cv, "beta_Yes", "Sued_1hot", "XGBoost Calibration curve (Beta)")
 
-```{r Likelihood Calibration Curves Validation Set}
-#modifying code from remotes::install_github('ML4LHS/runway')
-#to make calibration plots
-#creating the bins
-rf_cal_plot <- dplyr::mutate(xgb_cv, bin = dplyr::ntile(.pred_Yes, 10)) %>% 
-  dplyr::group_by(bin) %>% 
-  dplyr::mutate(n = dplyr::n(), 
-                bin_pred = mean(.pred_Yes, na.rm = TRUE), 
-                bin_prob = mean(Sued_1hot, na.rm = TRUE), 
-                se = sqrt((bin_prob * (1 - bin_prob))/n), ul = bin_prob + 1.96 * se, ll = bin_prob - 1.96 * se) %>% 
-  dplyr::mutate_at(dplyr::vars(ul, ll), . %>% scales::oob_squish(range = c(0, 1))) %>% 
-  dplyr::ungroup()
-#plotting
-  rf_cal_plot %>% 
-  ggplot2::ggplot() + 
-  ggplot2::scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = .1)) + 
-  ggplot2::scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.1)) + 
-  ggplot2::geom_abline(linetype = "dashed") + 
-  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                      size = 2, 
-                      color = "black") + 
-  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                         size = 0.5, 
-                         color = "black", width = 0.02) + 
-  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                      size = 2, 
-                      color = "black") + 
-  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                         size = 0.5, 
-                         color = "black", 
-                         width = 0.02) + 
-  ggplot2::geom_smooth(ggplot2::aes(x = .pred_Yes, y = Sued_1hot, color = "#00BFC4"), se = TRUE, method = "loess") + 
-  labs(title = "XGBoost Calibration curve", 
-     x = "Predicted probability",
-     y = "Empirical probability") +
-  ggplot2::theme_minimal() + 
-  ggplot2::theme(aspect.ratio = 1, legend.position="none") +
-  coord_cartesian(xlim=c(0,1), ylim=c(0,1),)
-  
-  #####################  PLATT
-  
-  rf_cal_plot <- dplyr::mutate(xgb_cv, bin = dplyr::ntile(platt_Yes, 10)) %>% 
-  dplyr::group_by(bin) %>% 
-  dplyr::mutate(n = dplyr::n(), 
-                bin_pred = mean(platt_Yes, na.rm = TRUE), 
-                bin_prob = mean(Sued_1hot, na.rm = TRUE), 
-                se = sqrt((bin_prob * (1 - bin_prob))/n), ul = bin_prob + 1.96 * se, ll = bin_prob - 1.96 * se) %>% 
-  dplyr::mutate_at(dplyr::vars(ul, ll), . %>% scales::oob_squish(range = c(0, 1))) %>% 
-  dplyr::ungroup()
-#plotting
-  rf_cal_plot %>% 
-  ggplot2::ggplot() + 
-  ggplot2::scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = .1)) + 
-  ggplot2::scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.1)) + 
-  ggplot2::geom_abline(linetype = "dashed") + 
-  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                      size = 2, 
-                      color = "black") + 
-  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                         size = 0.5, 
-                         color = "black", width = 0.02) + 
-  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                      size = 2, 
-                      color = "black") + 
-  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                         size = 0.5, 
-                         color = "black", 
-                         width = 0.02) + 
-  ggplot2::geom_smooth(ggplot2::aes(x = platt_Yes, y = Sued_1hot, color = "#00BFC4"), se = TRUE, method = "loess") + 
-  labs(title = "XGBoost Calibration curve (Platt Scaling)", 
-     x = "Predicted probability",
-     y = "Empirical probability") +
-  ggplot2::theme_minimal() + 
-  ggplot2::theme(aspect.ratio = 1, legend.position="none") +
-  coord_cartesian(xlim=c(0,1), ylim=c(0,1),)
-  
-  ###############################  ISOREG
-  
-  rf_cal_plot <- dplyr::mutate(xgb_cv, bin = dplyr::ntile(iso_Yes, 10)) %>% 
-  dplyr::group_by(bin) %>% 
-  dplyr::mutate(n = dplyr::n(), 
-                bin_pred = mean(iso_Yes, na.rm = TRUE), 
-                bin_prob = mean(Sued_1hot, na.rm = TRUE), 
-                se = sqrt((bin_prob * (1 - bin_prob))/n), 
-                ul = bin_prob + 1.96 * se, 
-                ll = bin_prob - 1.96 * se) %>% 
-  dplyr::mutate_at(dplyr::vars(ul, ll), . %>% scales::oob_squish(range = c(0, 1))) %>% 
-  dplyr::ungroup()
-#plotting
-  rf_cal_plot %>% 
-  ggplot2::ggplot() + 
-  ggplot2::scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = .1)) + 
-  ggplot2::scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = .1)) + 
-  ggplot2::geom_abline(linetype = "dashed") + 
-  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                      size = 2, 
-                      color = "black") + 
-  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                         size = 0.5, 
-                         color = "black", width = 0.02) + 
-  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                      size = 2, 
-                      color = "black") + 
-  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                         size = 0.5, 
-                         color = "black", 
-                         width = 0.02) + 
-  ggplot2::geom_smooth(ggplot2::aes(x = iso_Yes, y = Sued_1hot, color = "#00BFC4"), se = TRUE, method = "loess") + 
-  labs(title = "XGBoost Calibration curve (Isotonic Regression)", 
-     x = "Predicted probability",
-     y = "Empirical probability") +
-  ggplot2::theme_minimal() + 
-  ggplot2::theme(aspect.ratio = 1, legend.position="none") +
-  coord_cartesian(xlim=c(0,1), ylim=c(0,1),)
-  
-###############################  BETA
-  
-  rf_cal_plot <- dplyr::mutate(xgb_cv, bin = dplyr::ntile(beta_Yes, 10)) %>% 
-  dplyr::group_by(bin) %>% 
-  dplyr::mutate(n = dplyr::n(), 
-                bin_pred = mean(beta_Yes, na.rm = TRUE), 
-                bin_prob = mean(Sued_1hot, na.rm = TRUE), 
-                se = sqrt((bin_prob * (1 - bin_prob))/n), ul = bin_prob + 1.96 * se, ll = bin_prob - 1.96 * se) %>% 
-  dplyr::mutate_at(dplyr::vars(ul, ll), . %>% scales::oob_squish(range = c(0, 1))) %>% 
-  dplyr::ungroup()
-#plotting
-  rf_cal_plot %>% 
-  ggplot2::ggplot() + 
-  ggplot2::scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = .1)) + 
-  ggplot2::scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = .1)) + 
-  ggplot2::geom_abline(linetype = "dashed") + 
-  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                      size = 2, 
-                      color = "black") + 
-  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                         size = 0.5, 
-                         color = "black", width = 0.02) + 
-  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                      size = 2, 
-                      color = "black") + 
-  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                         size = 0.5, 
-                         color = "black", 
-                         width = 0.02) + 
-  ggplot2::geom_smooth(ggplot2::aes(x = beta_Yes, y = Sued_1hot, color = "#00BFC4"), se = TRUE, method = "loess") + 
-  labs(title = "XGBoost Calibration curve (Beta Calibration)", 
-     x = "Predicted probability",
-     y = "Empirical probability") +
-  ggplot2::theme_minimal() + 
-  ggplot2::theme(aspect.ratio = 1, legend.position="none") +
-  coord_cartesian(xlim=c(0,1), ylim=c(0,1),)
-```
-
-```{r Likelihood Calibration Curves Test Set}
-#calibration plot on test w/out scaling
-rf_cal_plot <- dplyr::mutate(xgb_test_res, bin = dplyr::ntile(.pred_Yes, 10)) %>% 
-  dplyr::group_by(bin) %>% 
-  dplyr::mutate(n = dplyr::n(), 
-                bin_pred = mean(.pred_Yes, na.rm = TRUE), 
-                bin_prob = mean(Sued_1hot, na.rm = TRUE), 
-                se = sqrt((bin_prob * (1 - bin_prob))/n), ul = bin_prob + 1.96 * se, ll = bin_prob - 1.96 * se) %>% 
-  dplyr::mutate_at(dplyr::vars(ul, ll), . %>% scales::oob_squish(range = c(0, 1))) %>% 
-  dplyr::ungroup()
-#plotting
-  rf_cal_plot %>% 
-  ggplot2::ggplot() + 
-  ggplot2::scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = .1)) + 
-  ggplot2::scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.1)) + 
-  ggplot2::geom_abline(linetype = "dashed") + 
-  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                      size = 2, 
-                      color = "black") + 
-  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                         size = 0.5, 
-                         color = "black", width = 0.02) + 
-  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                      size = 2, 
-                      color = "black") + 
-  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                         size = 0.5, 
-                         color = "black", 
-                         width = 0.02) + 
-  ggplot2::geom_smooth(ggplot2::aes(x = .pred_Yes, y = Sued_1hot, color = "#00BFC4"), se = TRUE, method = "loess") + 
-  labs(title = "XGBoost Calibration Curve on Test", 
-     x = "Predicted probability",
-     y = "Empirical probability") +
-  ggplot2::theme_minimal() + 
-  ggplot2::theme(aspect.ratio = 1, legend.position="none") +
-  coord_cartesian(xlim=c(0,1), ylim=c(0,1),)
-  
-#calibration plot on test w/ platt scaling
-rf_cal_plot <- dplyr::mutate(xgb_test_res, bin = dplyr::ntile(platt_Yes, 10)) %>% 
-  dplyr::group_by(bin) %>% 
-  dplyr::mutate(n = dplyr::n(), 
-                bin_pred = mean(platt_Yes, na.rm = TRUE), 
-                bin_prob = mean(Sued_1hot, na.rm = TRUE), 
-                se = sqrt((bin_prob * (1 - bin_prob))/n), ul = bin_prob + 1.96 * se, ll = bin_prob - 1.96 * se) %>% 
-  dplyr::mutate_at(dplyr::vars(ul, ll), . %>% scales::oob_squish(range = c(0, 1))) %>% 
-  dplyr::ungroup()
-#plotting
-  rf_cal_plot %>% 
-  ggplot2::ggplot() + 
-  ggplot2::scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = .1)) + 
-  ggplot2::scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.1)) + 
-  ggplot2::geom_abline(linetype = "dashed") + 
-  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                      size = 2, 
-                      color = "black") + 
-  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                         size = 0.5, 
-                         color = "black", width = 0.02) + 
-  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                      size = 2, 
-                      color = "black") + 
-  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                         size = 0.5, 
-                         color = "black", 
-                         width = 0.02) + 
-  ggplot2::geom_smooth(ggplot2::aes(x = platt_Yes, y = Sued_1hot, color = "#00BFC4"), se = TRUE, method = "loess") + 
-  labs(title = "XGBoost Calibration Curve on Test (Platt)", 
-     x = "Predicted probability",
-     y = "Empirical probability") +
-  ggplot2::theme_minimal() + 
-  ggplot2::theme(aspect.ratio = 1, legend.position="none") +
-  coord_cartesian(xlim=c(0,1), ylim=c(0,1),)
-  
-#calibration plot on test w/ beta cal
-rf_cal_plot <- dplyr::mutate(xgb_test_res, bin = dplyr::ntile(beta_Yes, 10)) %>% 
-  dplyr::group_by(bin) %>% 
-  dplyr::mutate(n = dplyr::n(), 
-                bin_pred = mean(beta_Yes, na.rm = TRUE), 
-                bin_prob = mean(Sued_1hot, na.rm = TRUE), 
-                se = sqrt((bin_prob * (1 - bin_prob))/n), ul = bin_prob + 1.96 * se, ll = bin_prob - 1.96 * se) %>% 
-  dplyr::mutate_at(dplyr::vars(ul, ll), . %>% scales::oob_squish(range = c(0, 1))) %>% 
-  dplyr::ungroup()
-#plotting
-  rf_cal_plot %>% 
-  ggplot2::ggplot() + 
-  ggplot2::scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = .1)) + 
-  ggplot2::scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.1)) + 
-  ggplot2::geom_abline(linetype = "dashed") + 
-  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                      size = 2, 
-                      color = "black") + 
-  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                         size = 0.5, 
-                         color = "black", width = 0.02) + 
-  ggplot2::geom_point(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                      size = 2, 
-                      color = "black") + 
-  ggplot2::geom_errorbar(ggplot2::aes(x = bin_pred, y = bin_prob, ymin = ll, ymax = ul), 
-                         size = 0.5, 
-                         color = "black", 
-                         width = 0.02) + 
-  ggplot2::geom_smooth(ggplot2::aes(x = beta_Yes, y = Sued_1hot, color = "#00BFC4"), se = TRUE, method = "loess") + 
-  labs(title = "XGBoost Calibration Curve on Test (Beta)", 
-     x = "Predicted probability",
-     y = "Empirical probability") +
-  ggplot2::theme_minimal() + 
-  ggplot2::theme(aspect.ratio = 1, legend.position="none") +
-  coord_cartesian(xlim=c(0,1), ylim=c(0,1),)
+#calibration curve on test
+plot_cal_curve(xgb_test_res, ".pred_Yes", "Sued_1hot", "XGBoost Calibration curve on test (Beta Calibration)")
 ```
 
 #### Using the calibrated best model to make the final prediction of SCA litigation likelihood for Mohawk Industries Inc.
@@ -1949,6 +1668,7 @@ beta_predict(likelihood_pred$.pred_Yes, beta_cal)
 The creation of a high quality severity model necessitated optimizing model hyperparameters and comparing multiple algorithms.In order to optimize hyperparameters and compare algorithms a nested cross validation procedure was implemented since the data set was relatively small (n\<100), thus utilizing the data budget optimally was essential. Nested cross-validation entails "nesting" a cross-validation loop, referred to as the inner loop, for hyperparameter optimization within another cross-validation loop, referred to as the outer loop, for estimating generalization accuracy. This procedure for model comparison optimally navigates the training and test data split trade-off that is especially detrimental to small data sets and circumvents the optimization bias introduced by using the same k-fold cross validation procedure to both tune model hyperparameters and evaluate models. In this case the Raschka nested cross-validation method was used, which entails having 5 outer folds and 2 inner folds. The 5 models created at the end of the outer loop of cross validation then had their performance averaged to provide the unbiased algorithm performance estimate and the standard deviation of this estimate is calculated as well to provide a measure of variation. Afterward the mean R2 was also calculated for performance evaluation.
 
 #### Final data set creation with missing value imputation using MissForest.
+
 MissForest imputation was selected as the missing value imputation method because it is a robust imputation method that is nonparametric, can handle numeric and categorical variables, is computationally inexpensive, can handle high dimensionality, and provides error estimates using OOB error.
 
 ```{r Final Dataset Cleaning and Imputation for Severity}
