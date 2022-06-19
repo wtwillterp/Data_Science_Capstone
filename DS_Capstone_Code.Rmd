@@ -372,7 +372,7 @@ securities2 <- securities %>%
 securities2$curcdm <- as.factor(securities2$curcdm)
 
 #assessing data completion
-#NAcheck(securities2) %>% arrange(percent_of_missing_values)
+NAcheck(securities2) %>% arrange(percent_of_missing_values)
 
 #assessing data date range
 #seems like the standard 2010-2014 range
@@ -537,6 +537,7 @@ fundamentals2 <- fundamentals %>%
 
 #assessing date range
 #in sync with all the others
+#commented out since this takes a while
 # fundamentals2$datadate <- strptime(fundamentals2$datadate, format = "%m/%d/%Y")
 # summary(fundamentals2$datadate)
 
@@ -544,7 +545,7 @@ fundamentals2 <- fundamentals %>%
 fundamentals2 <-  fundamentals2 %>% distinct(.keep_all = TRUE)
 
 #I inner join a csv of the data dictionary
-#fundamentals2 %>% NAcheck() %>% inner_join(datDict, by = c("names" = "Mnemonic")) %>% arrange(percent_of_missing_values)
+fundamentals2 %>% NAcheck() %>% inner_join(datDict, by = c("names" = "Mnemonic")) %>% arrange(percent_of_missing_values)
 
 #now removing variables that aren't useful in the model like company name, address
 #and business description
@@ -607,9 +608,6 @@ Data <- Data %>% left_join(stocks2, by = c("gvkey"))
 Data <- Data %>% left_join(ratings2, by = c("gvkey"))
 Data <- Data %>% left_join(ggroup_df %>% distinct(.keep_all = TRUE), by = c("gvkey"))
 
-#Assessing missing values
-#NAcheck(Data) %>% arrange(percent_of_missing_values)
-
 #Adding the response variables
 Data <- Data %>% left_join(SCA_filings2, by = c("gvkey"))
 
@@ -626,7 +624,7 @@ Data$Sued <- factor(Data$Sued, levels =c("Yes", "No"))
 #making sure everything worked correctly
 summary(Data$Sued)
 #checking NAs, quite a lot
-#NAcheck(Data) %>% arrange(percent_of_missing_values)
+NAcheck(Data) %>% arrange(percent_of_missing_values)
 
 #removing NAs
 Data <- NAcull(Data)
@@ -658,7 +656,7 @@ Data_imputed$OOBerror
 
 #checking to make sure that the data is properly imputed
 Best_impute <- Data_imputed$ximp
-#NAcheck(Best_impute)
+NAcheck(Best_impute)
 
 #reattaching settlement amount data after imputation
 Data <- cbind(Data_Settle, Best_impute)
@@ -896,39 +894,46 @@ set.seed(345)
 rf_spec <- rand_forest(mtry = tune(), min_n = tune()) %>%
   #mtry is the number of variables randomly sampled as candidates at each split
   #min_n is the number of trees to build (from which classification is decided)
-  set_engine("randomForest", num.threads = parallel::detectCores()) %>% 
+  set_engine("randomForest", num.threads = (parallel::detectCores() - 1)) %>% 
   set_mode("classification")
+
+#rf tuning grid
+# rf_grid <- grid_regular(
+#   mtry(range = c(2, 20)),
+#   min_n(range = c(1, 10)),
+#   levels = 4
+# )
 
 #tuning procedure using k-folds cross validation
 rf_tune_results <- Data_wf %>%
   add_model(rf_spec) %>% 
   tune_grid(Data_folds,
-            grid = 25, #25 candidate models
+            grid = 25,
             control = control_grid(save_pred = TRUE),
             metrics = metrics)
 
 #again since we care more about the underlying probabilities
 #rather than labels I go with mn_log_loss
-rf_tune_results %>% 
+rf_tune_results %>%
   show_best(metric = "mn_log_loss")
 
 #visualizing tune results
 autoplot(rf_tune_results)
 
 #selecting the best model by optimal log loss
-rf_best <- rf_tune_results %>% 
+rf_best <- rf_tune_results %>%
   select_best("mn_log_loss")
 
 #collecting the predictions of the best model
 #and mutating the column to identify the kind of model
-rf_train_best_pred <- rf_tune_results %>% 
+rf_train_best_pred <- rf_tune_results %>%
   collect_predictions(parameters = rf_best) %>%
   mutate(model = "Random Forest")
 
 #plotting the roc_curve for the best rf model
-rf_train_best_pred %>% 
+rf_train_best_pred %>%
   filter(.config == rf_best$.config) %>%
-  roc_curve(Sued, .pred_Yes) %>% 
+  roc_curve(Sued, .pred_Yes) %>%
   ggplot(aes(1 - specificity, sensitivity)) +
   geom_abline(lty = 2, color = "gray80", size = 1) +
   geom_path(show.legend = FALSE, alpha = 0.6, size = .75) +
@@ -939,15 +944,15 @@ rf_train_best_pred %>%
 rf_best_thresh_dat <- rf_train_best_pred %>%
   filter(.config == rf_best$.config) %>%
   pr_curve(Sued, .pred_Yes) %>%
-  #F1-measure 
+  #F1-measure
   mutate("F1 Measure" = ((1 + 1^2) * precision * recall) / ((1^2) * precision + recall)) %>%
   #F2-measure emphasizes minimizing false negatives
   mutate("F2 Measure" = ((1 + 2^2) * precision * recall) / ((2^2) * precision + recall)) %>%
   #F3-measure emphasizes minimizing false negatives even more
   mutate("F3 Measure" = ((1 + 2^3) * precision * recall) / ((2^3) * precision + recall)) %>%
   pivot_longer(!c(.threshold, recall, precision),
-               names_to = "Fbeta_Measure", 
-               values_to = "value") 
+               names_to = "Fbeta_Measure",
+               values_to = "value")
 
 #calculating ideal threshold using balanced accuracy
 rf_best_thresh_dat2 <- rf_train_best_pred %>%
@@ -967,15 +972,15 @@ rf_best_thresh <- rf_best_thresh$.threshold
 rf_best_thresh_dat %>%
   ggplot(aes(x = .threshold, y = value, color = Fbeta_Measure)) +
   geom_path(show.legend = TRUE, alpha = 0.6, size = .75) +
-  coord_equal() + 
-  geom_vline(xintercept= max(rf_best_thresh), 
-             linetype="dashed", 
+  coord_equal() +
+  geom_vline(xintercept= max(rf_best_thresh),
+             linetype="dashed",
              color = "red",
              size = .5) +
   labs(title = "Optimal Classifier Threshold for Random Forest", y = "Value", x = "Threshold" )
-  
+
 #the metrics of the best rf model on the train set
-rf_tune_results %>% 
+rf_tune_results %>%
   collect_metrics() %>%
   filter(.config == rf_best$.config)
 
